@@ -3,6 +3,8 @@
 #include "esp_log.h"
 
 #include "mr24hpc.h"
+#include "wifi_manager.h"
+#include "mqtt_app.h"
 
 static const char *TAG = "mr24hpc";
 
@@ -22,6 +24,8 @@ void app_main(void) {
     wifi_manager_init();
     wifi_manager_wait_connected();
 
+    mqtt_app_start();
+
     mr24hpc_state_t state;
     while(1) {
         if(mr24hpc_get_state(&state)) {
@@ -33,7 +37,7 @@ void app_main(void) {
             printf("Distance (m): %.2f\n", state.distance_m);
             printf("Speed (m/s): %.2f\n", state.speed_m_s);
             printf("Body Signals: %u\n", state.body_signals);
-            printf("Last Update (ms): %u\n", state.last_update_ms);
+            printf("Last Update (ms): %lu\n", state.last_update_ms);
             printf("==========================================================\n");
         }
         vTaskDelay(pdMS_TO_TICKS(1000));

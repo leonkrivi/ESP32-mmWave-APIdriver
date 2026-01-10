@@ -19,7 +19,8 @@ static EventGroupHandle_t wifi_event_group;
 esp_netif_t *netif_instance;
 static bool wifi_connected = false;
 
-static void wifi_event_handler(esp_event_base_t event_base,
+static void wifi_event_handler(void *handler_args,
+                               esp_event_base_t event_base,
                                int32_t event_id,
                                void *event_data)
 {
