@@ -7,10 +7,14 @@
 
 #include "wifi_manager.h"
 
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+const char *wifi_ssid = STR(WIFI_SSID);         // From .env file, loaded with CMake
+const char *wifi_password = STR(WIFI_PASSWORD); // as compiler definitions
+
 #define WIFI_CONNECTED_BIT (1 << 0)
 #define WIFI_FAIL_BIT      (1 << 1)
-#define CONFIG_WIFI_SSID      "YourSSID"
-#define CONFIG_WIFI_PASSWORD  "YourPassword"
 
 static const char *TAG = "wifi_manager";
 static int retry_num = 0;
@@ -78,8 +82,8 @@ esp_err_t wifi_manager_init(void)
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASSWORD,
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASSWORD,
         },
     };
 

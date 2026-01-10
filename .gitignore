@@ -3,6 +3,8 @@
 
 build/
 
+.env
+
 sdkconfig
 sdkconfig.old
 sdkconfig.ci
