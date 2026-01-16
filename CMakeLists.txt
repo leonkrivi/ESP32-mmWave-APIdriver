@@ -20,6 +20,7 @@ if(DEFINED ENV{WIFI_SSID} AND DEFINED ENV{WIFI_PASSWORD})
     add_compile_definitions(
         WIFI_SSID="$ENV{WIFI_SSID}"
         WIFI_PASSWORD="$ENV{WIFI_PASSWORD}"
+        MQTT_BROKER_IP="$ENV{MQTT_BROKER_IP}"
     )
 else()
     message(WARNING "WIFI_SSID or WIFI_PASSWORD not set")

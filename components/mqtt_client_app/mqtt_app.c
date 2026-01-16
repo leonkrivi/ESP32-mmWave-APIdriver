@@ -7,8 +7,12 @@
 
 #include "mqtt_app.h"
 
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
 
-static const char *TAG ="mqtt_app";
+const char *mqtt_broker_ip = STR(MQTT_BROKER_IP); // From .env file, loaded with CMake
+
+static const char *TAG ="* mqtt_app *";
 static int retry_num = 0;
 
 static void event_handler(void *handler_args,
@@ -22,9 +26,10 @@ static void event_handler(void *handler_args,
 
     switch (event_id) {
         case MQTT_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "Mqtt connected");
-            msg_id = esp_mqtt_client_subscribe_single(client, "/topic/test", 0);
-            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            ESP_LOGW(TAG, "Mqtt connected");
+            msg_id = esp_mqtt_client_subscribe_single(client, "/esp32/test", 0);
+            ESP_LOGW(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            retry_num = 0;
             break;
 
         case MQTT_EVENT_DISCONNECTED:
@@ -37,28 +42,21 @@ static void event_handler(void *handler_args,
             }
             break;
 
-        /*
-        case MQTT_EVENT_SUBSCRIBED:
-            printf("MQTT_EVENT_SUBSCRIBED, msg_id=%d\n", event->msg_id);
-            break;
-        case MQTT_EVENT_UNSUBSCRIBED:
-            printf("MQTT_EVENT_UNSUBSCRIBED, msg_id=%d\n", event->msg_id);
-            break;
-        case MQTT_EVENT_PUBLISHED:
-            printf("MQTT_EVENT_PUBLISHED, msg_id=%d\n", event->msg_id);
-            break;
-        case MQTT_EVENT_DATA:
-            printf("MQTT_EVENT_DATA\n");
-            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-            printf("DATA=%.*s\r\n", event->data_len, event->data);
-            break;
-        case MQTT_EVENT_ERROR:
-            printf("MQTT_EVENT_ERROR\n");
-            break;
-        default:
-            printf("Other event id:%d\n", event_id);
-            break;
-        */
+        // case MQTT_EVENT_SUBSCRIBED:
+        //     printf("MQTT_EVENT_SUBSCRIBED, msg_id=%d\n", event->msg_id);
+        //     break;
+        // case MQTT_EVENT_UNSUBSCRIBED:
+        //     printf("MQTT_EVENT_UNSUBSCRIBED, msg_id=%d\n", event->msg_id);
+        //     break;
+        // case MQTT_EVENT_PUBLISHED:
+        //     printf("MQTT_EVENT_PUBLISHED, msg_id=%d\n", event->msg_id);
+        //     break;
+        // case MQTT_EVENT_ERROR:
+        //     printf("MQTT_EVENT_ERROR\n");
+        //     break;
+        // default:
+        //     printf("Other event id:%d\n", event_id);
+        //     break;
     }
 }
 
@@ -66,7 +64,7 @@ static void event_handler(void *handler_args,
 void mqtt_app_start(void) {
 
     esp_mqtt_client_config_t cfg = {
-        .broker.address.uri = "mqtt://broker.hivemq.com",
+        .broker.address.uri = "mqtt://"MQTT_BROKER_IP":1883",
     };
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&cfg);
