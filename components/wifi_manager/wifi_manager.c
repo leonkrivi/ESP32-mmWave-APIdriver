@@ -3,6 +3,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "nvs_flash.h"
 
 #include "wifi_manager.h"
@@ -16,7 +17,8 @@ const char *wifi_password = STR(WIFI_PASSWORD); // as compiler definitions
 #define WIFI_CONNECTED_BIT (1 << 0)
 #define WIFI_FAIL_BIT      (1 << 1)
 
-static const char *TAG = "wifi_manager";
+
+static const char *TAG = "* wifi_manager *";
 static int retry_num = 0;
 
 static EventGroupHandle_t wifi_event_group;
@@ -48,8 +50,12 @@ static void wifi_event_handler(void *handler_args,
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         wifi_connected = true;
         retry_num = 0;
-        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);   // Signal that we are connected
-        ESP_LOGI(TAG, "WiFi connected, IP acquired");
+        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+        
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
+        char ip_str[16];  // "xxx.xxx.xxx.xxx\0"
+        esp_ip4addr_ntoa(&event->ip_info.ip, ip_str, sizeof(ip_str));
+        ESP_LOGW(TAG, "Wi-Fi connected, IP acquired: %s", ip_str);
     }
 }
 

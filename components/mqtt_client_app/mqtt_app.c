@@ -25,38 +25,48 @@ static void event_handler(void *handler_args,
     int msg_id;
 
     switch (event_id) {
-        case MQTT_EVENT_CONNECTED:
-            ESP_LOGW(TAG, "Mqtt connected");
-            msg_id = esp_mqtt_client_subscribe_single(client, "/esp32/test", 0);
-            ESP_LOGW(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-            retry_num = 0;
+        case MQTT_EVENT_BEFORE_CONNECT:
+            ESP_LOGW(TAG, "Client initialized, connecting...");
             break;
-
+        case MQTT_EVENT_CONNECTED:
+            retry_num = 0;
+            ESP_LOGW(TAG, "Client connected to the broker");
+            ESP_LOGW(TAG, "Subscribing to topic /esp32/test");
+            msg_id = esp_mqtt_client_subscribe_single(client, "/esp32/test", 0);
+            ESP_LOGW(TAG, "Subscription request sent, msg_id=%d", msg_id);
+            ESP_LOGW(TAG, "Publishing to topic /esp32/test");
+            msg_id = esp_mqtt_client_publish(client, "/esp32/test", "Hello from ESP32 MQTT client", 0, 1, 0);
+            ESP_LOGW(TAG, "Message published, msg_id=%d", msg_id);
+            break;
         case MQTT_EVENT_DISCONNECTED:
             if (retry_num < 5) {
-                ESP_LOGW(TAG, "Mqtt disconnected, retrying...\n");
+                ESP_LOGW(TAG, "Client disconnected, reconnecting...");
                 esp_mqtt_client_reconnect(client);
                 retry_num++;
             } else {
-                ESP_LOGE(TAG, "Mqtt disconnected, timeout reached\n");
+                ESP_LOGE(TAG, "Client disconnected, timeout reached");
             }
             break;
-
-        // case MQTT_EVENT_SUBSCRIBED:
-        //     printf("MQTT_EVENT_SUBSCRIBED, msg_id=%d\n", event->msg_id);
-        //     break;
-        // case MQTT_EVENT_UNSUBSCRIBED:
-        //     printf("MQTT_EVENT_UNSUBSCRIBED, msg_id=%d\n", event->msg_id);
-        //     break;
-        // case MQTT_EVENT_PUBLISHED:
-        //     printf("MQTT_EVENT_PUBLISHED, msg_id=%d\n", event->msg_id);
-        //     break;
-        // case MQTT_EVENT_ERROR:
-        //     printf("MQTT_EVENT_ERROR\n");
-        //     break;
-        // default:
-        //     printf("Other event id:%d\n", event_id);
-        //     break;
+        case MQTT_EVENT_SUBSCRIBED:
+            ESP_LOGW(TAG, "Subscribed successfully (check: msg_id=%d)", event->msg_id);
+            break;
+        case MQTT_EVENT_UNSUBSCRIBED:
+            ESP_LOGW(TAG, "Unsubscribed successfully (check: msg_id=%d)", event->msg_id);
+            break;
+        case MQTT_EVENT_PUBLISHED:
+            ESP_LOGW(TAG, "Message published successfully (check: msg_id=%d)", event->msg_id);
+            break;
+        case MQTT_EVENT_DATA:
+            ESP_LOGW(TAG, "Message received on topic: %.*s", event->topic_len, event->topic);
+            ESP_LOGW(TAG, "| -- data: %.*s", event->data_len, event->data);
+            break;
+        case MQTT_EVENT_ERROR:
+            ESP_LOGE(TAG, "MQTT event error occurred");
+            ESP_LOGE(TAG, "Error type: %d", event->error_handle->error_type);
+            break;
+        default:
+            ESP_LOGE(TAG, "Unknown event id:%d", event_id);
+            break;
     }
 }
 
