@@ -1,5 +1,3 @@
-#pragma once
-
 #include <stdio.h>
 
 #include "esp_log.h"
@@ -10,10 +8,30 @@
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-const char *mqtt_broker_ip = STR(MQTT_BROKER_IP); // From .env file, loaded with CMake
+ESP_EVENT_DEFINE_BASE(MQTT_APP_USER_EVENT_BASE);
 
 static const char *TAG ="* mqtt_app *";
+
+static esp_mqtt_client_handle_t mqtt_client = NULL;
+static esp_mqtt_client_config_t mqtt_broker_cfg =
+    {
+        .broker.address.uri = "mqtt://" MQTT_BROKER_IP ":1883" // From .env file, loaded with CMake
+    };
 static int retry_num = 0;
+
+
+static void user_event_handler(void *handler_args,
+                               esp_event_base_t event_base,
+                               int32_t event_id,
+                               void *event_data)
+{
+    if (event_id == MQTT_APP_USER_EVENT_STOP && mqtt_client) {
+        esp_mqtt_client_stop(mqtt_client);
+        esp_mqtt_client_destroy(mqtt_client);
+        mqtt_client = NULL;
+    }
+}
+
 
 static void event_handler(void *handler_args,
                           esp_event_base_t base,
@@ -26,25 +44,32 @@ static void event_handler(void *handler_args,
 
     switch (event_id) {
         case MQTT_EVENT_BEFORE_CONNECT:
-            ESP_LOGW(TAG, "Client initialized, connecting...");
+            if (retry_num < 1)
+                ESP_LOGW(TAG, "Client initialized, connecting...");
             break;
         case MQTT_EVENT_CONNECTED:
             retry_num = 0;
-            ESP_LOGW(TAG, "Client connected to the broker");
+            ESP_LOGW(TAG, "Client connected to the broker: %s", mqtt_broker_cfg.broker.address.uri);
             ESP_LOGW(TAG, "Subscribing to topic /esp32/test");
             msg_id = esp_mqtt_client_subscribe_single(client, "/esp32/test", 0);
             ESP_LOGW(TAG, "Subscription request sent, msg_id=%d", msg_id);
             ESP_LOGW(TAG, "Publishing to topic /esp32/test");
-            msg_id = esp_mqtt_client_publish(client, "/esp32/test", "Hello from ESP32 MQTT client", 0, 1, 0);
+            msg_id = esp_mqtt_client_publish(client, "/esp32/test", "--> TEST MESSAGE <--", 0, 1, 0);
             ESP_LOGW(TAG, "Message published, msg_id=%d", msg_id);
             break;
         case MQTT_EVENT_DISCONNECTED:
-            if (retry_num < 5) {
-                ESP_LOGW(TAG, "Client disconnected, reconnecting...");
-                esp_mqtt_client_reconnect(client);
+            if (retry_num < 3) {
                 retry_num++;
-            } else {
+                uint32_t delay_ms = retry_num * 3000;
+                ESP_LOGW(TAG, "Client disconnected, reconnecting...");
+                vTaskDelay(pdMS_TO_TICKS(delay_ms));
+                esp_mqtt_client_reconnect(client);
+            } 
+            else {
+                retry_num++;
                 ESP_LOGE(TAG, "Client disconnected, timeout reached");
+                ESP_LOGW(TAG, "Stopping MQTT client");
+                ESP_ERROR_CHECK(esp_event_post(MQTT_APP_USER_EVENT_BASE, MQTT_APP_USER_EVENT_STOP, NULL, 0, portMAX_DELAY));
             }
             break;
         case MQTT_EVENT_SUBSCRIBED:
@@ -73,13 +98,12 @@ static void event_handler(void *handler_args,
 
 void mqtt_app_start(void) {
 
-    esp_mqtt_client_config_t cfg = {
-        .broker.address.uri = "mqtt://"MQTT_BROKER_IP":1883",
-    };
+    ESP_LOGW(TAG, "Connecting to broker: %s", mqtt_broker_cfg.broker.address.uri); 
 
-    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&cfg);
-    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, event_handler, NULL);
-    esp_mqtt_client_start(client);
+    mqtt_client = esp_mqtt_client_init(&mqtt_broker_cfg);
+    esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, event_handler, NULL);
+    esp_event_handler_register(MQTT_APP_USER_EVENT_BASE, ESP_EVENT_ANY_ID, user_event_handler, NULL);
+    esp_mqtt_client_start(mqtt_client);
 
     return;
 }
