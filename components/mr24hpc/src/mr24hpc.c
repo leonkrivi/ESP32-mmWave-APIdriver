@@ -9,17 +9,18 @@
 #include "freertos/semphr.h"
 
 #include "mr24hpc.h"
-#include "mr24hpc_uart.h"
 #include "internal.h"
+#include "mr24hpc_uart.h"
 
+esp_err_t mr24hpc_activate_underlying_open_functions(void);
 static void mr24hpc_uart_task(void *arg);
 static void mr24hpc_driver_task(void *arg);
-uint8_t calculate_checksum(const uint8_t *data, size_t len);
 
 static QueueHandle_t uart_rx_queue = NULL;
-static mr24hpc_state_t global_senstor_state;
 static SemaphoreHandle_t state_mutex = NULL;
-static mr24hpc_callback_function state_update_callback_function = NULL;
+
+mr24hpc_state_t global_sensor_state;  // shared with parser
+static mr24hpc_callback cb_function = NULL;
 
 
 // ==================== Initialization ====================
@@ -33,7 +34,7 @@ esp_err_t mr24hpc_init(void) {
 }
 
 esp_err_t mr24hpc_start(void) {
-    mr24hpc_activate_underlying_open_functions();
+    ESP_ERROR_CHECK(mr24hpc_activate_underlying_open_functions());
     xTaskCreate(mr24hpc_uart_task, "mr24_uart", 2048, NULL, 10, NULL);
     xTaskCreate(mr24hpc_driver_task, "mr24_drv", 4096, NULL, 9, NULL);
     return ESP_OK;
@@ -45,7 +46,7 @@ esp_err_t mr24hpc_activate_underlying_open_functions(void) {
     package[7] = calculate_checksum(package, 7);
     mr24hpc_uart_write(package, sizeof(package));
 
-    //check if functions are activated
+    //package that checks if functions are activated
     uint8_t check_package[] = {0x53,0x59,0x08,0x80,0x00,0x01,0x0F,0xFF,0x54,0x43};
     check_package[7] = calculate_checksum(check_package, 7);
 
@@ -58,15 +59,12 @@ esp_err_t mr24hpc_activate_underlying_open_functions(void) {
     for (int i=0; i<10; i++) {
         mr24hpc_uart_write(check_package, sizeof(check_package));
         read_len = mr24hpc_uart_read(response, sizeof(response), 1000);
-
         if (read_len == sizeof(expected_response) &&
             memcmp(response, expected_response, sizeof(expected_response)) == 0) {
             return ESP_OK;
         }
-
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-    // failed to activate
     return ESP_FAIL;
 }
 
@@ -77,65 +75,68 @@ bool mr24hpc_get_state(mr24hpc_state_t *state_copy) {
     if (!state_copy) return false;
 
     mr24hpc_state_lock();
-    *state_copy = global_senstor_state;
+    *state_copy = global_sensor_state;
     mr24hpc_state_unlock();
 
     return true;
 }
 
-esp_err_t mr24hpc_register_callback(mr24hpc_callback_function cb_function) {
+esp_err_t mr24hpc_register_callback(mr24hpc_callback cb) {
     // if (!state_mutex) return ESP_FAIL;
     mr24hpc_state_lock();
-    state_update_callback_function = cb_function;
+    cb_function = cb;
     mr24hpc_state_unlock();
     return ESP_OK;
 }
 
-//iz internal.h
 void mr24hpc_update_state(const mr24hpc_state_t *delta) {
     
     if (!delta) return;
 
     mr24hpc_state_t new_state_snapshot;
-    mr24hpc_callback_function cb_to_call = NULL;
+    mr24hpc_callback cb_to_call = NULL;
 
     mr24hpc_state_lock();
 
-    if (delta->valid_mask & MR24HPC_VALID_PRESENCE) {
-        global_senstor_state.presence = delta->presence;
+    if (delta->valid_mask & MR24HPC_VALID_EXISTENCE_ENERGY) {
+        global_sensor_state.existence_energy = delta->existence_energy;
     }
 
-    if (delta->valid_mask & MR24HPC_VALID_MOTION_STATE) {
-        global_senstor_state.motion_state = delta->motion_state;
+    if (delta->valid_mask & MR24HPC_VALID_STATIC_DISTANCE) {
+        global_sensor_state.static_distance_m = delta->static_distance_m;
     }
 
-    if (delta->valid_mask & MR24HPC_VALID_DISTANCE) {
-        global_senstor_state.distance_m = delta->distance_m;
+    if (delta->valid_mask & MR24HPC_VALID_MOTION_ENERGY) {
+        global_sensor_state.motion_energy = delta->motion_energy;
     }
 
-    if (delta->valid_mask & MR24HPC_VALID_SPEED) {
-        global_senstor_state.speed_m_s = delta->speed_m_s;
+    if (delta->valid_mask & MR24HPC_VALID_MOTION_DISTANCE) {
+        global_sensor_state.motion_distance_m = delta->motion_distance_m;
     }
 
-    if (delta->valid_mask & MR24HPC_VALID_BODY_SIGNALS) {
-        global_senstor_state.body_signals = delta->body_signals;
+    if (delta->valid_mask & MR24HPC_VALID_MOTION_SPEED) {
+        global_sensor_state.motion_speed_m_s = delta->motion_speed_m_s;
     }
 
-    global_senstor_state.last_update_ms = delta->last_update_ms;
+    if (delta->valid_mask & MR24HPC_VALID_DIRECTION) {
+        global_sensor_state.direction = delta->direction;
+    }
 
-    new_state_snapshot = global_senstor_state;
-    cb_to_call = state_update_callback_function;
+    if (delta->valid_mask & MR24HPC_VALID_MOVING_PARAMS) {
+        global_sensor_state.moving_params = delta->moving_params;
+    }
+
+    global_sensor_state.last_update_ms = delta->last_update_ms;
+    global_sensor_state.valid_mask     = delta->valid_mask;
+
+    new_state_snapshot = global_sensor_state;
+    cb_to_call = cb_function;
 
     mr24hpc_state_unlock();
 
     if (cb_to_call) {
         cb_to_call(&new_state_snapshot);
     }
-}
-
-uint32_t mr24hpc_ms_since_last_update(void) {
-    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000ULL);
-    return now - global_senstor_state.last_update_ms;
 }
 
 
