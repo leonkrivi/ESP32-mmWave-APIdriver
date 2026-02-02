@@ -35,7 +35,7 @@ static void wifi_event_handler(void *handler_args,
     }
 
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (retry_num < 5) {
+        if (retry_num < 3) {
             esp_wifi_connect();
             retry_num++;
             ESP_LOGW(TAG, "WiFi disconnected, retrying...");
@@ -97,19 +97,20 @@ esp_err_t wifi_manager_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "WiFi init done");
+    ESP_LOGW(TAG, "WiFi init done");
 
     return ESP_OK;
 }
 
-void wifi_manager_wait_connected(void)
+void wifi_manager_wait_connected(uint32_t timeout_ms)
 {
     xEventGroupWaitBits(
         wifi_event_group,
         WIFI_CONNECTED_BIT,
         pdFALSE,
         pdTRUE,
-        portMAX_DELAY);
+        pdMS_TO_TICKS(timeout_ms)
+    );
 }
 
 bool wifi_manager_is_connected(void)

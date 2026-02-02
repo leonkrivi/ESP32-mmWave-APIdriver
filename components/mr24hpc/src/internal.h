@@ -11,8 +11,8 @@ typedef enum {
     WAIT_H2,
     WAIT_CTRL,
     WAIT_CMD,
-    WAIT_LEN1, // first (MSB) of 16-bit length
-    WAIT_LEN2, // second (MSB) of 16-bit length
+    WAIT_LEN1, // first (MSB)
+    WAIT_LEN2, // second (LSB)
     WAIT_DATA,
     WAIT_CHECKSUM
 } mr24hpc_parser_state_t;
@@ -29,11 +29,15 @@ typedef struct {
 // Interni API drivera
 void mr24hpc_parser_init();
 void mr24hpc_parser_feed(uint8_t byte);
+
 void mr24hpc_update_state(const mr24hpc_state_t *delta);
 void handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *data, uint16_t len);
 
 void mr24hpc_state_lock(void);
 void mr24hpc_state_unlock(void);
+
+// Global sensor state (defined in mr24hpc.c)
+extern mr24hpc_state_t global_sensor_state;
 
 // pomocne funkcije
 uint8_t calculate_checksum(const uint8_t *data, size_t len);

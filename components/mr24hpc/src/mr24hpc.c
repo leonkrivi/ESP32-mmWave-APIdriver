@@ -4,9 +4,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "esp_err.h"
-#include "freertos/semphr.h"
+#include "esp_log.h"
 
 #include "mr24hpc.h"
 #include "internal.h"
@@ -34,7 +35,10 @@ esp_err_t mr24hpc_init(void) {
 }
 
 esp_err_t mr24hpc_start(void) {
-    ESP_ERROR_CHECK(mr24hpc_activate_underlying_open_functions());
+    esp_err_t ret = mr24hpc_activate_underlying_open_functions();
+    if (ret != ESP_OK) {
+        ESP_LOGW("mr24hpc", "Could not confirm underlying open function activation (continuing anyway)");
+    }
     xTaskCreate(mr24hpc_uart_task, "mr24_uart", 2048, NULL, 10, NULL);
     xTaskCreate(mr24hpc_driver_task, "mr24_drv", 4096, NULL, 9, NULL);
     return ESP_OK;
