@@ -16,7 +16,7 @@ Change into the directory where you want the GitHub repository to be cloned.
 
 `cd path_to_directory`
 
-Run: `git clone https://github.com/LK110/ESP32-mmWave-APIdriver`
+Run: `git clone https://github.com/leonkrivi/ESP32-mmWave-APIdriver`
 
 ***
 
@@ -25,16 +25,12 @@ Create a .env file and place it in the project root directory `ESP32-mmWave-APId
 
 The file should contain the Wi-Fi SSID and Wi-Fi password for the network that you want your ESP32 to connect to, as well as the MQTT broker IP address.
 
-The credentials should be in this format and order:
+The credentials should be in this format:
 ```
 WIFI_SSID=your_wifi_ssid
 WIFI_PASSWORD=your_wifi_password
 MQTT_BROKER_IP=your_mqtt_broker_ip
 ```
-**Note:** for demo use, I am using my home WLAN and am running the MQTT broker on my computer which is connected to that WLAN.
-That means that MQTT_BROKER_IP is set to my WLAN IP address. If you want to mimic my setup, you should set MQTT_BROKER_IP to be
-your WLAN IP, and run the broker from a computer connected to the same WLAN.
-
 ***
 
 ### Connect MR24HPC1 mmWave sensor to ESP32 board
@@ -49,7 +45,7 @@ Connect the sensor to the ESP32 controller as follows:
 >
 > product overview: https://files.seeedstudio.com/wiki/mmWave-radar/24GHz_mmWave_Sensor-Human_Static_Presence_Module_Lite_Datasheet.pdf
 >
-> user manual: https://files.seeedstudio.com/wiki/mmWave-radar/24GHz_mmWave_Sensor-Human_Static_Presence_Module_Lite_Datasheet.pdf
+> user manual: https://files.seeedstudio.com/wiki/mmWave-radar/MR24HPC1_User_Manual-V2.0.pdf
 
 **Note:** This project is not designed exclusively for the MR24HPC1 sensor. The code is separated into components, and you can write your own code
 for a different sensor as a separate component and plug it into the existing code by changing a few lines in `main/app_main.c`.
@@ -107,7 +103,13 @@ idf.py build flash monitor
 
 This command will build the code, flash it to the ESP32, and monitor its output.
 
-If automatic serial port detection fails you can specify the port manually. Replace `<port>` with your device path, for example on Linux:
+**Note:** If automatic serial port detection fails you can specify the port manually. Make sure you have a build of the code ready before running next commands.
+
+```bash
+idf.py -p <port> flash monitor
+```
+
+Replace `<port>` with your device path, for example on Linux:
 
 ```bash
 idf.py -p /dev/ttyUSB0 flash monitor
