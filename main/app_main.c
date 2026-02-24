@@ -77,11 +77,13 @@ void app_main(void) {
     ESP_LOGW(TAG, "Initializing WiFi...");
     wifi_manager_init();
     ESP_LOGW(TAG, "Waiting for WiFi connection...");
-    wifi_manager_wait_connected(20000);
+    wifi_manager_wait_connected(portMAX_DELAY);
 
     ESP_LOGW(TAG, "Initializing MQTT...");
     mqtt_app_register_rate_callback(on_rate_change);
     mqtt_app_start();
+    ESP_LOGW(TAG, "Waiting for MQTT connection...");
+    mqtt_app_wait_connected(portMAX_DELAY);
 
     ESP_LOGW(TAG, "App main is running");
 

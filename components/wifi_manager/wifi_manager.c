@@ -1,29 +1,19 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
-#include "esp_event.h"
-#include "esp_log.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
+#include "esp_event.h"
+#include "esp_log.h"
 
 #include "wifi_manager.h"
 
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
-
-const char *wifi_ssid = STR(WIFI_SSID);         // From .env file, loaded with CMake
-const char *wifi_password = STR(WIFI_PASSWORD); // as compiler definitions
-
 #define WIFI_CONNECTED_BIT (1 << 0)
-#define WIFI_FAIL_BIT      (1 << 1)
-
 
 static const char *TAG = "* wifi_manager *";
-static int retry_num = 0;
 
 static EventGroupHandle_t wifi_event_group;
 esp_netif_t *netif_instance;
-static bool wifi_connected = false;
 
 static void wifi_event_handler(void *handler_args,
                                esp_event_base_t event_base,
@@ -35,23 +25,14 @@ static void wifi_event_handler(void *handler_args,
     }
 
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (retry_num < 3) {
-            esp_wifi_connect();
-            retry_num++;
-            ESP_LOGW(TAG, "WiFi disconnected, retrying...");
-        } else {
-            ESP_LOGE(TAG, "WiFi disconnected, timeout reached");
-            xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
-        }
-        wifi_connected = false;
+        xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
+        ESP_LOGW(TAG, "WiFi disconnected, retrying...");
+        esp_wifi_connect();
     }
 
     // IP je dodijeljen kasnije, zato se koristi eventGroup za sinkronizaciju
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        wifi_connected = true;
-        retry_num = 0;
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
-        
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         char ip_str[16];  // "xxx.xxx.xxx.xxx\0"
         esp_ip4addr_ntoa(&event->ip_info.ip, ip_str, sizeof(ip_str));
@@ -64,10 +45,6 @@ esp_err_t wifi_manager_init(void)
     esp_err_t ret;
     
     wifi_event_group = xEventGroupCreate();
-    // if (!wifi_event_group) {
-    //     ESP_LOGE(TAG, "Failed to create WiFi event group");
-    //     return ESP_FAIL;
-    // }
 
     // WiFi needs NVS (Non-Volatile Storage) to store settings
     ret = nvs_flash_init();
@@ -102,18 +79,18 @@ esp_err_t wifi_manager_init(void)
     return ESP_OK;
 }
 
-void wifi_manager_wait_connected(uint32_t timeout_ms)
+void wifi_manager_wait_connected(TickType_t timeout_ticks)
 {
     xEventGroupWaitBits(
         wifi_event_group,
         WIFI_CONNECTED_BIT,
         pdFALSE,
         pdTRUE,
-        pdMS_TO_TICKS(timeout_ms)
+        timeout_ticks
     );
 }
 
 bool wifi_manager_is_connected(void)
 {
-    return wifi_connected;
+    return (xEventGroupGetBits(wifi_event_group) & WIFI_CONNECTED_BIT) != 0;
 }

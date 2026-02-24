@@ -16,16 +16,15 @@ else()
     message(WARNING ".env file not found, WiFi credentials may be missing")
 endif()
 
-if(DEFINED ENV{WIFI_SSID} AND DEFINED ENV{WIFI_PASSWORD})
+if(DEFINED ENV{WIFI_SSID} AND DEFINED ENV{WIFI_PASSWORD} AND DEFINED ENV{MQTT_BROKER_IP})
     add_compile_definitions(
         WIFI_SSID="$ENV{WIFI_SSID}"
         WIFI_PASSWORD="$ENV{WIFI_PASSWORD}"
         MQTT_BROKER_IP="$ENV{MQTT_BROKER_IP}"
     )
 else()
-    message(WARNING "WIFI_SSID or WIFI_PASSWORD not set")
+    message(FATAL_ERROR "WIFI_SSID or WIFI_PASSWORD or MQTT_BROKER_IP not set. Check your .env file.")
 endif()
-
 
 # -----------------------------
 # ESP-IDF boilerplate (comes after .env loading)

@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "mqtt_client.h"
 
@@ -14,16 +16,18 @@
 #define MQTT_TOPIC_STATE     "/esp32/sensor/state"
 #define MQTT_TOPIC_RATE_CMD  "/esp32/sensor/rate"
 
-ESP_EVENT_DEFINE_BASE(MQTT_APP_USER_EVENT_BASE);
+#define MQTT_CONNECTED_BIT (1 << 0)
+
+#define MQTT_RECONNECT_DELAY_MS  5000
 
 static const char *TAG ="* mqtt_app *";
 
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 static esp_mqtt_client_config_t mqtt_broker_cfg = {
-        .broker.address.uri = "mqtt://" MQTT_BROKER_IP ":1883" // From .env file, loaded with CMake
+        .broker.address.uri = "mqtt://"MQTT_BROKER_IP":1883",
+        .network.reconnect_timeout_ms = MQTT_RECONNECT_DELAY_MS,
 };
-static int retry_num = 0;
-static bool connected = false;
+static EventGroupHandle_t mqtt_event_group = NULL;
 static mqtt_rate_change_cb_t rate_change_cb = NULL;
 
 // Helper: convert direction enum to string
@@ -32,20 +36,6 @@ static const char* dir_to_str(mr24hpc_direction_t dir) {
         case MR24HPC_DIR_APPROACHING: return "approaching";
         case MR24HPC_DIR_MOVING_AWAY: return "moving_away";
         default: return "none";
-    }
-}
-
-
-static void user_event_handler(void *handler_args,
-                               esp_event_base_t event_base,
-                               int32_t event_id,
-                               void *event_data)
-{
-    if (event_id == MQTT_APP_USER_EVENT_STOP && mqtt_client) {
-        esp_mqtt_client_stop(mqtt_client);
-        esp_mqtt_client_destroy(mqtt_client);
-        mqtt_client = NULL;
-        connected = false;
     }
 }
 
@@ -60,35 +50,18 @@ static void event_handler(void *handler_args,
     int msg_id;
 
     switch (event_id) {
-        case MQTT_EVENT_BEFORE_CONNECT:
-            if (retry_num < 1)
-                ESP_LOGW(TAG, "Client initialized, connecting...");
-            break;
+        // case MQTT_EVENT_BEFORE_CONNECT:
 
         case MQTT_EVENT_CONNECTED:
-            retry_num = 0;
-            connected = true;
+            xEventGroupSetBits(mqtt_event_group, MQTT_CONNECTED_BIT);
             ESP_LOGW(TAG, "Client connected to broker: %s", mqtt_broker_cfg.broker.address.uri);
-            ESP_LOGW(TAG, "Subscribing to topic %s", MQTT_TOPIC_RATE_CMD);
             msg_id = esp_mqtt_client_subscribe_single(client, MQTT_TOPIC_RATE_CMD, 1);
-            ESP_LOGW(TAG, "Subscribed to %s (msg_id=%d)", MQTT_TOPIC_RATE_CMD, msg_id);
+            ESP_LOGW(TAG, "Subscribing to %s (msg_id=%d)", MQTT_TOPIC_RATE_CMD, msg_id);
             break;
 
         case MQTT_EVENT_DISCONNECTED:
-            connected = false;
-            if (retry_num < 3) {
-                retry_num++;
-                uint32_t delay_ms = retry_num * 3000;
-                ESP_LOGW(TAG, "Client disconnected, reconnecting...");
-                vTaskDelay(pdMS_TO_TICKS(delay_ms));
-                esp_mqtt_client_reconnect(client);
-            } 
-            else {
-                retry_num++;
-                ESP_LOGE(TAG, "Client disconnected, timeout reached");
-                ESP_LOGW(TAG, "Stopping MQTT client");
-                ESP_ERROR_CHECK(esp_event_post(MQTT_APP_USER_EVENT_BASE, MQTT_APP_USER_EVENT_STOP, NULL, 0, portMAX_DELAY));
-            }
+            xEventGroupClearBits(mqtt_event_group, MQTT_CONNECTED_BIT);
+            ESP_LOGW(TAG, "Disconnected, auto-reconnect in %d ms...", MQTT_RECONNECT_DELAY_MS);
             break;
 
         case MQTT_EVENT_SUBSCRIBED:
@@ -99,8 +72,7 @@ static void event_handler(void *handler_args,
             ESP_LOGW(TAG, "Unsubscribed (check: msg_id=%d)", event->msg_id);
             break;
 
-        case MQTT_EVENT_PUBLISHED:
-            break;
+        // case MQTT_EVENT_PUBLISHED:
 
         case MQTT_EVENT_DATA:
             ESP_LOGW(TAG, "Received: %.*s -> %.*s", 
@@ -123,10 +95,9 @@ static void event_handler(void *handler_args,
 
         case MQTT_EVENT_ERROR:
             ESP_LOGE(TAG, "MQTT event error occurred");
-            ESP_LOGE(TAG, "Error type: %d", event->error_handle->error_type);
             break;
+
         default:
-            ESP_LOGE(TAG, "Unknown event id:%d", event_id);
             break;
     }
 }
@@ -134,18 +105,27 @@ static void event_handler(void *handler_args,
 
 void mqtt_app_start(void) {
 
+    mqtt_event_group = xEventGroupCreate();
+
     ESP_LOGW(TAG, "Connecting to broker: %s", mqtt_broker_cfg.broker.address.uri); 
 
     mqtt_client = esp_mqtt_client_init(&mqtt_broker_cfg);
     esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, event_handler, NULL);
-    esp_event_handler_register(MQTT_APP_USER_EVENT_BASE, ESP_EVENT_ANY_ID, user_event_handler, NULL);
     esp_mqtt_client_start(mqtt_client);
+}
 
-    return;
+void mqtt_app_wait_connected(TickType_t timeout_ticks) {
+    xEventGroupWaitBits(
+        mqtt_event_group,
+        MQTT_CONNECTED_BIT,
+        pdFALSE,
+        pdTRUE,
+        timeout_ticks
+    );
 }
 
 void mqtt_app_publish_state(const mr24hpc_state_t *state) {
-    if (!mqtt_client || !connected || !state) return;
+    if (!mqtt_client || !mqtt_app_is_connected() || !state) return;
 
     // JSON payload
     char payload[256];
@@ -176,5 +156,6 @@ void mqtt_app_register_rate_callback(mqtt_rate_change_cb_t cb) {
 }
 
 bool mqtt_app_is_connected(void) {
-    return connected;
+    if (!mqtt_event_group) return false;
+    return (xEventGroupGetBits(mqtt_event_group) & MQTT_CONNECTED_BIT) != 0;
 }

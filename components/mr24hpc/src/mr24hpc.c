@@ -21,7 +21,7 @@ static QueueHandle_t uart_rx_queue = NULL;
 static SemaphoreHandle_t state_mutex = NULL;
 
 mr24hpc_state_t global_sensor_state;  // shared with parser
-static mr24hpc_callback cb_function = NULL;
+static mr24hpc_callback g_cb_function = NULL;
 
 
 // ==================== Initialization ====================
@@ -88,7 +88,7 @@ bool mr24hpc_get_state(mr24hpc_state_t *state_copy) {
 esp_err_t mr24hpc_register_callback(mr24hpc_callback cb) {
     // if (!state_mutex) return ESP_FAIL;
     mr24hpc_state_lock();
-    cb_function = cb;
+    g_cb_function = cb;
     mr24hpc_state_unlock();
     return ESP_OK;
 }
@@ -134,7 +134,7 @@ void mr24hpc_update_state(const mr24hpc_state_t *delta) {
     global_sensor_state.valid_mask     = delta->valid_mask;
 
     new_state_snapshot = global_sensor_state;
-    cb_to_call = cb_function;
+    cb_to_call = g_cb_function;
 
     mr24hpc_state_unlock();
 
