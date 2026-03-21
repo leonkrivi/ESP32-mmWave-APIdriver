@@ -1,122 +1,119 @@
-# Requirements
-**project specific**
-- ESP32 controller
-- MR24HPC1 mmWave sensor + wires to connect it to the ESP32
-- MQTT broker (I used Mosquitto)
+# ESP32 mmWave API driver (MR24HPC)
 
-**other**
-- ESP-IDF (I recommend VS Code extension: https://marketplace.visualstudio.com/items?itemName=espressif.esp-idf-extension)
-- Wi-Fi connection
+ESP32 project that reads an MR24HPC1 mmWave sensor over UART and publishes the sensor state to an MQTT broker.
+
+This README is written to be easy to follow (tested on macOS + VS Code ESP-IDF extension) and matches the current project code.
+
+## What you need
+
+### Hardware
+
+- ESP32 development board
+- MR24HPC1 mmWave sensor
+- Jumper wires
+- USB data cable
+
+### Software
+
+- VS Code + ESP-IDF extension: https://marketplace.visualstudio.com/items?itemName=espressif.esp-idf-extension
 - Git
+- Wi-Fi network
+- MQTT broker (Mosquitto recommended)
 
-# Startup instructions
+## Quick start (end-to-end)
 
-### Clone GitHub repository
-Change into the directory where you want the GitHub repository to be cloned.
+1. Clone the repository
 
-`cd path_to_directory`
-
-Run: `git clone https://github.com/leonkrivi/ESP32-mmWave-APIdriver`
-
-***
-
-### Prepare valid credentials
-Create a .env file and place it in the project root directory `ESP32-mmWave-APIdriver/`.
-
-The file should contain the Wi-Fi SSID and Wi-Fi password for the network that you want your ESP32 to connect to, as well as the MQTT broker IP address.
-
-The credentials should be in this format:
+```bash
+cd path_to_directory
+git clone https://github.com/leonkrivi/ESP32-mmWave-APIdriver
+cd ESP32-mmWave-APIdriver
 ```
+
+2. Create your `.env`
+
+This project reads credentials from a `.env` file in the project root during CMake configure.
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
 WIFI_SSID=your_wifi_ssid
 WIFI_PASSWORD=your_wifi_password
 MQTT_BROKER_IP=your_mqtt_broker_ip
 ```
-***
 
-### Connect MR24HPC1 mmWave sensor to ESP32 board
-Connect the sensor to the ESP32 controller as follows:
-| MR24HPC1 | ESP32 |
-|--|--|
-| RX | GPIO17 |
-| TX | GPIO16 |
-| 5V | V5 |
-| GND | GND |
-> Manufacturer's information about the MR24HPC1 sensor:
->
-> product overview: https://files.seeedstudio.com/wiki/mmWave-radar/24GHz_mmWave_Sensor-Human_Static_Presence_Module_Lite_Datasheet.pdf
->
-> user manual: https://files.seeedstudio.com/wiki/mmWave-radar/MR24HPC1_User_Manual-V2.0.pdf
-
-**Note:** This project is not designed exclusively for the MR24HPC1 sensor. The code is separated into components, and you can write your own code
-for a different sensor as a separate component and plug it into the existing code by changing a few lines in `main/app_main.c`.
-
-***
-
-### Run MQTT broker on your machine
-If you want to use the Mosquitto MQTT broker like me, you will have to configure it so that it listens on the required interface on your computer.
-Simplest configuration for local use:
+If you change `.env` later, run:
 
 ```bash
-listener 1883 0.0.0.0   # listens on port 1883 on all interfaces
-allow_anonymous true    # enables connection without authentication
-```
-**Note:** The port should be set to 1883 in the Mosquitto configuration file because that is the value the project source code is expecting.
-If you want to change it, go to `/components/mqtt_client_app/mqtt_app.c` and change the port value from `:1883` to match your Mosquitto configuration file.
-
-```C
-esp_mqtt_client_config_t cfg = {
-        .broker.address.uri = "mqtt://"MQTT_BROKER_IP":1883",
-};
+idf.py reconfigure
 ```
 
-> For more info on Mosquitto configuration you can look up: https://mosquitto.org/man/mosquitto-conf-5.html
+3. Wire the MR24HPC1 sensor
 
-Start Mosquitto with:
+The UART pins are fixed in the code:
+
+- ESP32 TX = GPIO17
+- ESP32 RX = GPIO16
+
+Connect UART as a cross-over (TX -> RX, RX -> TX):
+
+| MR24HPC1 | ESP32       |
+| -------- | ----------- |
+| RX       | GPIO17 (TX) |
+| TX       | GPIO16 (RX) |
+| 5V       | 5V          |
+| GND      | GND         |
+
+Sensor docs:
+
+- Datasheet: https://files.seeedstudio.com/wiki/mmWave-radar/24GHz_mmWave_Sensor-Human_Static_Presence_Module_Lite_Datasheet.pdf
+- User manual: https://files.seeedstudio.com/wiki/mmWave-radar/MR24HPC1_User_Manual-V2.0.pdf
+
+4. Start your MQTT broker
+
+This firmware expects MQTT on port 1883.
+The app waits for MQTT to connect before it starts publishing sensor data.
+
+Minimal Mosquitto config:
+
+```conf
+listener 1883 0.0.0.0
+allow_anonymous true
+```
+
+Start Mosquitto:
 
 ```bash
 mosquitto -c path_to_mosquitto_config_file
 ```
 
-> For more info on start up options visit: https://mosquitto.org/man/mosquitto-8.html
+5. Build, flash and monitor
 
-***
+In VS Code, click `Open ESP-IDF Terminal` in the status bar, then run:
 
-### Compile and run the driver
-Connect your ESP32 to the computer with a USB data/power cable.
-
-Position yourself in the root ESP-IDF project directory `ESP32-mmWave-APIdriver/`.
-
-Make sure your ESP-IDF environment is configured for your setup.
-
-> Here are the instructions for ESP-IDF as a VS Code extension: https://github.com/espressif/vscode-esp-idf-extension/blob/master/README.md
->
-> Here are the instructions for ESP-IDF as a CLI: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/index.html#build-your-first-project
-
-From here on, instructions assume you are using the ESP‑IDF VS Code extension.
-
-Click on `Open ESP-IDF Terminal` in the status bar. This will bring up a terminal with all of the environment variables automatically loaded.
-
-In the opened terminal run:
 ```bash
 idf.py build flash monitor
 ```
 
-This command will build the code, flash it to the ESP32, and monitor its output.
-
-**Note:** If automatic serial port detection fails you can specify the port manually. Make sure you have a build of the code ready before running next commands.
+If the serial port is not detected automatically on macOS:
 
 ```bash
-idf.py -p <port> flash monitor
+ls /dev/cu.*
+idf.py -p /dev/cu.usbserial-0001 flash monitor
 ```
 
-Replace `<port>` with your device path, for example on Linux:
+## Troubleshooting
 
-```bash
-idf.py -p /dev/ttyUSB0 flash monitor
-```
+- Build fails with missing credentials: ensure `.env` exists and contains `WIFI_SSID`, `WIFI_PASSWORD`, `MQTT_BROKER_IP`, then run `idf.py reconfigure`.
+- No sensor data: double-check TX/RX are crossed and the sensor is powered.
+- MQTT never connects: verify `MQTT_BROKER_IP` is reachable from the ESP32 on your Wi-Fi network and that the broker listens on port 1883.
 
-or on macOS:
+## Notes
 
-```bash
-idf.py -p /dev/tty.usbserial-0001 flash monitor
-```
+- The firmware waits for Wi-Fi, then waits for MQTT, then starts publishing.
+- Default sensor query interval is 5000 ms.
+- The codebase is component-based, so swapping the sensor component is straightforward if needed.

@@ -5,6 +5,8 @@ build/
 
 .env
 
+!.env.example
+
 sdkconfig
 sdkconfig.old
 sdkconfig.ci
