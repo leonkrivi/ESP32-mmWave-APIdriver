@@ -5,6 +5,9 @@ cmake_minimum_required(VERSION 3.16)
 # -----------------------------
 set(ENV_FILE "${CMAKE_SOURCE_DIR}/.env")
 
+# Re-run CMake configure whenever .env changes.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ENV_FILE}")
+
 if(EXISTS ${ENV_FILE})
     file(STRINGS ${ENV_FILE} ENV_LINES)
     foreach(line ${ENV_LINES})
