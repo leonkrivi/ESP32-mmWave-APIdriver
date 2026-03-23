@@ -13,15 +13,16 @@
 #include "mr24hpc_uart.h"
 
 static QueueHandle_t uart_rx_queue = NULL;
+SemaphoreHandle_t state_mutex = NULL;
+
 static mr24hpc_parser_config_t g_parser_cfg;
 static bool g_uof_mode_enabled = false;
 
-mr24hpc_state_t g_sensor_state; // shared with parser
+mr24hpc_state_t g_sensor_state;
 UOF_mr24hpc_state_t g_uof_sensor_state;
-SemaphoreHandle_t state_mutex = NULL;
 mr24hpc_callback g_cb_function = NULL;
-static uint32_t g_query_interval_ms = 5000;
 
+static uint32_t g_query_interval_ms = 5000;
 static const uint8_t g_standard_query_cmds[] = {0x81, 0x82, 0x83, 0x8B};
 static const uint8_t g_uof_query_cmds[] = {0x01, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87};
 

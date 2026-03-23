@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -26,9 +27,11 @@ static esp_mqtt_client_config_t mqtt_broker_cfg = {
 static EventGroupHandle_t mqtt_event_group = NULL;
 static mqtt_rate_change_cb_t rate_change_cb = NULL;
 static const char *g_rate_command_topic = NULL;
+static uint32_t g_payload_seq = 0;
 
 // ==================== Forward Declarations ====================
 static const char *uof_direction_to_str(UOF_mr24hpc_direction_t dir);
+static uint32_t mqtt_next_payload_seq(void);
 static void event_handler(void *handler_args,
                           esp_event_base_t base,
                           int32_t event_id,
@@ -39,6 +42,7 @@ void mqtt_app_start(const char *rate_topic)
 {
 
     g_rate_command_topic = rate_topic;
+    g_payload_seq = 0;
 
     mqtt_event_group = xEventGroupCreate();
 
@@ -54,18 +58,22 @@ void mqtt_app_publish_state(const char *topic, const mr24hpc_state_t *state)
     if (!mqtt_client || !mqtt_app_is_connected() || !state || !topic)
         return;
 
-    char payload[160];
+    uint32_t seq = mqtt_next_payload_seq();
+
+    char payload[192];
     snprintf(payload, sizeof(payload),
              "{"
+             "\"seq\":%" PRIu32 ","
              "\"presence\":%u,"
-             "\"motion\":%u,"
-             "\"body_sign\":%u,"
-             "\"direction\":%u"
+             "\"motion\":%u"
+             //  "\"body_movement\":%u,"
+             //  "\"proximity\":%u"
              "}",
+             seq,
              (unsigned)state->presence,
-             (unsigned)state->motion,
-             (unsigned)state->body_sign,
-             (unsigned)state->direction);
+             (unsigned)state->motion);
+    //  (unsigned)state->body_movement,
+    //  (unsigned)state->proximity
 
     esp_mqtt_client_publish(mqtt_client, topic, payload, 0, 0, 0);
 }
@@ -75,9 +83,12 @@ void mqtt_app_publish_uof_state(const char *topic, const UOF_mr24hpc_state_t *st
     if (!mqtt_client || !mqtt_app_is_connected() || !state || !topic)
         return;
 
-    char payload[256];
+    uint32_t seq = mqtt_next_payload_seq();
+
+    char payload[288];
     snprintf(payload, sizeof(payload),
              "{"
+             "\"seq\":%" PRIu32 ","
              "\"existence_energy\":%u,"
              "\"static_distance_m\":%.1f,"
              "\"motion_energy\":%u,"
@@ -86,6 +97,7 @@ void mqtt_app_publish_uof_state(const char *topic, const UOF_mr24hpc_state_t *st
              "\"direction\":\"%s\","
              "\"moving_params\":%u"
              "}",
+             seq,
              state->existence_energy,
              state->static_distance_m,
              state->motion_energy,
@@ -127,7 +139,6 @@ static void event_handler(void *handler_args,
 {
     esp_mqtt_event_handle_t event = event_data;
     esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
 
     switch (event_id)
     {
@@ -138,8 +149,8 @@ static void event_handler(void *handler_args,
         ESP_LOGW(TAG, "Client connected to broker: %s", mqtt_broker_cfg.broker.address.uri);
         if (g_rate_command_topic)
         {
-            msg_id = esp_mqtt_client_subscribe_single(client, g_rate_command_topic, 1);
-            ESP_LOGW(TAG, "Subscribing to %s (msg_id=%d)", g_rate_command_topic, msg_id);
+            esp_mqtt_client_subscribe_single(client, g_rate_command_topic, 1);
+            // ESP_LOGW(TAG, "Subscribing to %s (msg_id=%d)", g_rate_command_topic, msg_id);
         }
         break;
 
@@ -149,11 +160,11 @@ static void event_handler(void *handler_args,
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGW(TAG, "Subscribed (check: msg_id=%d)", event->msg_id);
+        ESP_LOGW(TAG, "Subscribed to %s", g_rate_command_topic);
         break;
 
     case MQTT_EVENT_UNSUBSCRIBED:
-        ESP_LOGW(TAG, "Unsubscribed (check: msg_id=%d)", event->msg_id);
+        ESP_LOGW(TAG, "Unsubscribed from %s", g_rate_command_topic);
         break;
 
         // case MQTT_EVENT_PUBLISHED:
@@ -162,9 +173,7 @@ static void event_handler(void *handler_args,
         // topic and data are NOT null-terminated, so we use the provided lengths
         const char *topic = event->topic;
         const char *data = event->data;
-        ESP_LOGW(TAG, "Received: %.*s -> %.*s",
-                 event->topic_len, topic,
-                 event->data_len, data);
+        ESP_LOGI(TAG, "received message: (%.*s) %.*s", event->topic_len, topic, event->data_len, data);
 
         // Check if this is a rate change command
         if (g_rate_command_topic &&
@@ -177,9 +186,9 @@ static void event_handler(void *handler_args,
             strncpy(buf, data, len);
             uint32_t interval = (uint32_t)atoi(buf);
 
-            ESP_LOGW(TAG, "Rate change command: %lu ms", interval);
-            if (rate_change_cb)
+            if (rate_change_cb && interval > 0)
             {
+                ESP_LOGI(TAG, "--> rate change command: %lu ms", interval);
                 rate_change_cb(interval);
             }
         }
@@ -201,4 +210,10 @@ static const char *uof_direction_to_str(UOF_mr24hpc_direction_t dir)
     default:
         return "NONE/STATIONARY";
     }
+}
+
+// thread-safe equivalent to g_payload_seq++
+static uint32_t mqtt_next_payload_seq(void)
+{
+    return __atomic_fetch_add(&g_payload_seq, 1U, __ATOMIC_RELAXED);
 }

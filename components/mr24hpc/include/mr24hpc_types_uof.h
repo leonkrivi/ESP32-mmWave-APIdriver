@@ -26,8 +26,8 @@ typedef struct
     uint8_t moving_params;
 
     // Timestamps
-    uint32_t last_update_ms; // timestamp of last update
-    uint32_t valid_mask;     // bitmask of which fields are valid (changed)
+    uint32_t last_update_ms;    // timestamp of last update
+    uint32_t received_bit_mask; // bitmask of which fields were received in this update
 } UOF_mr24hpc_state_t;
 
 typedef enum

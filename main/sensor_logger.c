@@ -4,6 +4,9 @@
 
 #include "esp_timer.h"
 
+static uint32_t g_standard_log_seq = 0;
+static uint32_t g_uof_log_seq = 0;
+
 static uint32_t get_time_ms(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000ULL);
@@ -11,7 +14,7 @@ static uint32_t get_time_ms(void)
 
 static const char *presence_to_str(mr24hpc_presence_t presence)
 {
-    return (presence == MR24HPC_PRESENCE_SOMEONE) ? "SOMEONE" : "NONE";
+    return (presence == MR24HPC_PRESENCE_OCCUPIED) ? "OCCUPIED" : "UNOCCUPIED";
 }
 
 static const char *motion_to_str(mr24hpc_motion_t motion)
@@ -27,16 +30,18 @@ static const char *motion_to_str(mr24hpc_motion_t motion)
     }
 }
 
-static const char *direction_to_str(mr24hpc_direction_t dir)
+static const char *proximity_to_str(mr24hpc_proximity_t proximity)
 {
-    switch (dir)
+    switch (proximity)
     {
-    case MR24HPC_DIR_APPROACHING:
-        return "APPROACHING";
-    case MR24HPC_DIR_MOVING_AWAY:
-        return "MOVING AWAY";
+    case MR24HPC_PROXIMITY_NEAR:
+        return "NEAR";
+    case MR24HPC_PROXIMITY_FAR:
+        return "FAR";
+    case MR24HPC_PROXIMITY_NO_STATE:
+        return "NO_STATE";
     default:
-        return "NONE/STATIONARY";
+        return "UNKNOWN";
     }
 }
 
@@ -55,18 +60,20 @@ static const char *uof_direction_to_str(UOF_mr24hpc_direction_t dir)
 
 void sensor_logger_print_standard(const mr24hpc_state_t *state, uint32_t query_interval_ms)
 {
+
     printf("\n========== MR24HPC Sensor Update ==========\n");
     printf("(query interval: %lu ms)\n", query_interval_ms);
     printf("Presence:           %s\n", presence_to_str(state->presence));
     printf("Motion:             %s\n", motion_to_str(state->motion));
-    printf("Body Sign:          %u\n", state->body_sign);
-    printf("Direction:          %s\n", direction_to_str(state->direction));
+    // printf("Body Movement:      %u\n", state->body_movement);
+    // printf("Proximity:          %s\n", proximity_to_str(state->proximity));
     printf("Age:                %lu ms\n", get_time_ms() - state->last_update_ms);
     printf("============================================\n\n");
 }
 
 void sensor_logger_print_uof(const UOF_mr24hpc_state_t *state, uint32_t query_interval_ms)
 {
+
     printf("\n========== MR24HPC Sensor Update (UOF) ==========\n");
     printf("(query interval: %lu ms)\n", query_interval_ms);
     printf("Existence Energy:   %u\n", state->existence_energy);

@@ -8,6 +8,7 @@ typedef enum
 {
     SENSOR_TRACKER_NO_CHANGE = 0,
     SENSOR_TRACKER_FIRST_SAMPLE,
+    SENSOR_TRACKER_CYCLE_INCOMPLETE,
     SENSOR_TRACKER_CHANGED
 } sensor_tracker_result_t;
 

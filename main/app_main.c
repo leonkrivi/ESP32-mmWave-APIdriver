@@ -73,29 +73,32 @@ static void on_state_change(const mr24hpc_state_t *state)
     if (!mqtt_app_is_connected())
         return;
 
+    // uof mode state evaluation
     if (mr24hpc_is_uof_mode())
     {
         if (!mr24hpc_get_uof_state(&uof_state))
             return;
 
         tracker_result = sensor_state_tracker_evaluate_uof(&uof_state);
-        if (tracker_result == SENSOR_TRACKER_NO_CHANGE)
+        if (tracker_result == SENSOR_TRACKER_CYCLE_INCOMPLETE || tracker_result == SENSOR_TRACKER_NO_CHANGE)
             return;
 
-        if (tracker_result == SENSOR_TRACKER_CHANGED)
-            sensor_logger_print_uof(&uof_state, g_frequency);
+        // for logging and debugging
+        // if (tracker_result == SENSOR_TRACKER_CHANGED || tracker_result == SENSOR_TRACKER_FIRST_SAMPLE)
+        //     sensor_logger_print_uof(&uof_state, g_frequency);
 
         mqtt_app_publish_uof_state(MQTT_TOPIC_UOF_STATE, &uof_state);
         return;
     }
 
+    // standard mode state evaluation
     tracker_result = sensor_state_tracker_evaluate(state);
-    if (tracker_result == SENSOR_TRACKER_NO_CHANGE)
+    if (tracker_result == SENSOR_TRACKER_CYCLE_INCOMPLETE || tracker_result == SENSOR_TRACKER_NO_CHANGE)
         return;
 
-    if (tracker_result == SENSOR_TRACKER_CHANGED)
-        // console output (for debugging)
-        sensor_logger_print_standard(state, g_frequency);
+    // for logging and debugging
+    // if (tracker_result == SENSOR_TRACKER_CHANGED || tracker_result == SENSOR_TRACKER_FIRST_SAMPLE)
+    //     sensor_logger_print_standard(state, g_frequency);
 
     // send via MQTT if state changed or first sample
     mqtt_app_publish_state(MQTT_TOPIC_STATE, state);

@@ -12,7 +12,6 @@
 #include "mr24hpc_types.h"
 #include "mr24hpc_types_uof.h"
 
-// pokazivac na funkciju: (mr24hpc_state_t*) -> void
 typedef void (*mr24hpc_callback)(const mr24hpc_state_t *state);
 
 esp_err_t mr24hpc_init(bool UOF_enabled);

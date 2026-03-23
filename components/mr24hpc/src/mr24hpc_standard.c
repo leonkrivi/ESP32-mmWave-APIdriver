@@ -21,8 +21,8 @@ void mr24hpc_standard_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *dat
     switch (normalized_cmd)
     {
     case 0x01:
-        update.presence = (data[0] == 0x01) ? MR24HPC_PRESENCE_SOMEONE : MR24HPC_PRESENCE_NONE;
-        update.valid_mask = MR24HPC_VALID_PRESENCE;
+        update.presence = (data[0] == 0x01) ? MR24HPC_PRESENCE_OCCUPIED : MR24HPC_PRESENCE_UNNOCUPIED;
+        update.received_bit_mask = MR24HPC_VALID_PRESENCE;
         break;
 
     case 0x02:
@@ -32,22 +32,22 @@ void mr24hpc_standard_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *dat
             update.motion = MR24HPC_MOTION_ACTIVE;
         else
             update.motion = MR24HPC_MOTION_NONE;
-        update.valid_mask = MR24HPC_VALID_MOTION;
+        update.received_bit_mask = MR24HPC_VALID_MOTION;
         break;
 
     case 0x03:
-        update.body_sign = data[0];
-        update.valid_mask = MR24HPC_VALID_BODY_SIGN;
+        update.body_movement = data[0];
+        update.received_bit_mask = MR24HPC_VALID_BODY_MOVEMENT;
         break;
 
     case 0x0B:
         if (data[0] == 0x01)
-            update.direction = MR24HPC_DIR_APPROACHING;
+            update.proximity = MR24HPC_PROXIMITY_NEAR;
         else if (data[0] == 0x02)
-            update.direction = MR24HPC_DIR_MOVING_AWAY;
+            update.proximity = MR24HPC_PROXIMITY_FAR;
         else
-            update.direction = MR24HPC_DIR_NONE;
-        update.valid_mask = MR24HPC_VALID_DIRECTION;
+            update.proximity = MR24HPC_PROXIMITY_NO_STATE;
+        update.received_bit_mask = MR24HPC_VALID_PROXIMITY;
         break;
 
     default:

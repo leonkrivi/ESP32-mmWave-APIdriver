@@ -30,40 +30,40 @@ void mr24hpc_uof_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *data, ui
         update.motion_distance_m = UOF_motion_dist_to_m(data[3]);
         update.motion_speed_m_s = UOF_motion_speed_to_m_s(data[4]);
         update.direction = UOF_speed_to_direction(data[4]);
-        update.valid_mask = UOF_MR24HPC_VALID_EXISTENCE_ENERGY |
-                            UOF_MR24HPC_VALID_STATIC_DISTANCE |
-                            UOF_MR24HPC_VALID_MOTION_ENERGY |
-                            UOF_MR24HPC_VALID_MOTION_DISTANCE |
-                            UOF_MR24HPC_VALID_MOTION_SPEED |
-                            UOF_MR24HPC_VALID_DIRECTION;
+        update.received_bit_mask = UOF_MR24HPC_VALID_EXISTENCE_ENERGY |
+                                   UOF_MR24HPC_VALID_STATIC_DISTANCE |
+                                   UOF_MR24HPC_VALID_MOTION_ENERGY |
+                                   UOF_MR24HPC_VALID_MOTION_DISTANCE |
+                                   UOF_MR24HPC_VALID_MOTION_SPEED |
+                                   UOF_MR24HPC_VALID_DIRECTION;
         break;
 
     case 0x81:
         if (len < 1)
             return;
         update.existence_energy = data[0];
-        update.valid_mask = UOF_MR24HPC_VALID_EXISTENCE_ENERGY;
+        update.received_bit_mask = UOF_MR24HPC_VALID_EXISTENCE_ENERGY;
         break;
 
     case 0x82:
         if (len < 1)
             return;
         update.motion_energy = data[0];
-        update.valid_mask = UOF_MR24HPC_VALID_MOTION_ENERGY;
+        update.received_bit_mask = UOF_MR24HPC_VALID_MOTION_ENERGY;
         break;
 
     case 0x83:
         if (len < 1)
             return;
         update.static_distance_m = UOF_static_dist_to_m(data[0]);
-        update.valid_mask = UOF_MR24HPC_VALID_STATIC_DISTANCE;
+        update.received_bit_mask = UOF_MR24HPC_VALID_STATIC_DISTANCE;
         break;
 
     case 0x84:
         if (len < 1)
             return;
         update.motion_distance_m = UOF_motion_dist_to_m(data[0]);
-        update.valid_mask = UOF_MR24HPC_VALID_MOTION_DISTANCE;
+        update.received_bit_mask = UOF_MR24HPC_VALID_MOTION_DISTANCE;
         break;
 
     case 0x85:
@@ -71,21 +71,21 @@ void mr24hpc_uof_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *data, ui
             return;
         update.motion_speed_m_s = UOF_motion_speed_to_m_s(data[0]);
         update.direction = UOF_speed_to_direction(data[0]);
-        update.valid_mask = UOF_MR24HPC_VALID_MOTION_SPEED | UOF_MR24HPC_VALID_DIRECTION;
+        update.received_bit_mask = UOF_MR24HPC_VALID_MOTION_SPEED | UOF_MR24HPC_VALID_DIRECTION;
         break;
 
     case 0x86:
         if (len < 1)
             return;
         update.direction = (UOF_mr24hpc_direction_t)data[0];
-        update.valid_mask = UOF_MR24HPC_VALID_DIRECTION;
+        update.received_bit_mask = UOF_MR24HPC_VALID_DIRECTION;
         break;
 
     case 0x87:
         if (len < 1)
             return;
         update.moving_params = data[0];
-        update.valid_mask = UOF_MR24HPC_VALID_MOVING_PARAMS;
+        update.received_bit_mask = UOF_MR24HPC_VALID_MOVING_PARAMS;
         break;
 
     default:
