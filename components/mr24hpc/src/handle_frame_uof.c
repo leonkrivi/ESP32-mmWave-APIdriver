@@ -11,7 +11,7 @@ static float UOF_motion_dist_to_m(uint8_t code);
 static float UOF_motion_speed_to_m_s(uint8_t code);
 static UOF_mr24hpc_direction_t UOF_speed_to_direction(uint8_t code);
 
-void mr24hpc_uof_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *data, uint16_t len)
+void uof_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *data, uint16_t len)
 {
     if (ctrl != 0x08)
         return;
@@ -93,7 +93,7 @@ void mr24hpc_uof_handle_frame(uint8_t ctrl, uint8_t cmd, const uint8_t *data, ui
     }
 
     update.last_update_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
-    mr24hpc_update_uof_state(&update);
+    update_uof_state(&update);
 }
 
 static float UOF_static_dist_to_m(uint8_t code)

@@ -10,10 +10,12 @@
 
 static const char *TAG = "* app_main *";
 
-static uint32_t g_frequency = 5000; // default: 5 seconds
+#define INITIAL_QUERY_INTERVAL_MS 5000
+#define INITIAL_HEARTBEAT_INTERVAL_MS 30000
 
 #define DEVICE_ID "esp32_01"
 #define ROOM_NAME "living_room"
+
 #define MQTT_TOPIC_PUBLISH_STATE "/test/backend"
 #define MQTT_TOPIC_RECEIVE_RATE_COMMAND "/test/esp32/frequency/set"
 #define MQTT_TOPIC_RECEIVE_CONNECTION_CHECK "/test/esp32/status/get"
@@ -22,7 +24,7 @@ static uint32_t g_frequency = 5000; // default: 5 seconds
 
 static void on_state_change(const mr24hpc_state_t *state);
 static void on_rate_change(uint32_t interval_ms);
-static void on_check_connection(void);
+static void on_heartbeat_detected(void);
 
 // ==================== Main Application ====================
 void app_main(void)
@@ -33,8 +35,12 @@ void app_main(void)
     printf("================  start of APP output ================\n");
     ESP_LOGW(TAG, "Initializing MR24HPC sensor...");
     mr24hpc_init(uof);
-    mr24hpc_set_query_interval_ms(g_frequency); // set initial frequency before callbacks start coming in
-    mr24hpc_register_callback(on_state_change);
+
+    set_query_interval_ms(INITIAL_QUERY_INTERVAL_MS);         // set initial frequency before callbacks start coming in
+    set_heartbeat_interval_ms(INITIAL_HEARTBEAT_INTERVAL_MS); // set heartbeat interval to 30s
+
+    register_state_callback(on_state_change);
+    register_heartbeat_callback(on_heartbeat_detected);
     mr24hpc_start();
 
     ESP_LOGW(TAG, "Initializing WiFi...");
@@ -44,7 +50,6 @@ void app_main(void)
 
     ESP_LOGW(TAG, "Initializing MQTT...");
     mqtt_app_register_rate_callback(on_rate_change);
-    mqtt_app_register_connection_check_callback(on_check_connection);
     mqtt_app_start(DEVICE_ID, ROOM_NAME, MQTT_TOPIC_RECEIVE_RATE_COMMAND, MQTT_TOPIC_RECEIVE_CONNECTION_CHECK);
     ESP_LOGW(TAG, "Waiting for MQTT connection...");
     mqtt_app_wait_connected(portMAX_DELAY);
@@ -101,7 +106,11 @@ static void on_state_change(const mr24hpc_state_t *state)
 
 static void on_rate_change(uint32_t interval_ms)
 {
-    g_frequency = interval_ms;
-    mr24hpc_set_query_interval_ms(interval_ms);
+    set_query_interval_ms(interval_ms);
     ESP_LOGW(TAG, "Frequency changed to %lu ms", interval_ms);
+}
+
+static void on_heartbeat_detected(void)
+{
+    ESP_LOGW(TAG, "Heartbeat detected");
 }

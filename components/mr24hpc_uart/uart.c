@@ -12,7 +12,7 @@
 
 // ==================== Personal Header functions ====================
 
-void mr24hpc_uart_init(void)
+void uart_init(void)
 {
     const uart_config_t cfg = {
         .baud_rate = MR24HPC_BAUDRATE,
@@ -27,7 +27,7 @@ void mr24hpc_uart_init(void)
                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 }
 
-int mr24hpc_uart_read(uint8_t *buf, size_t len, uint32_t timeout_ms)
+int uart_read(uint8_t *buf, size_t len, uint32_t timeout_ms)
 {
     return uart_read_bytes( // thread-safe internally (doesnt need external mutex)
         MR24HPC_UART,
@@ -36,7 +36,7 @@ int mr24hpc_uart_read(uint8_t *buf, size_t len, uint32_t timeout_ms)
         pdMS_TO_TICKS(timeout_ms));
 }
 
-int mr24hpc_uart_write(const uint8_t *buf, size_t len)
+int uart_write(const uint8_t *buf, size_t len)
 {
     return uart_write_bytes(MR24HPC_UART, (const char *)buf, len);
 }

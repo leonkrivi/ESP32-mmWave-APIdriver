@@ -10,10 +10,11 @@
 extern SemaphoreHandle_t state_mutex;
 extern mr24hpc_state_t g_sensor_state;
 extern UOF_mr24hpc_state_t g_uof_sensor_state;
-extern mr24hpc_callback g_cb_function;
+extern state_callback g_state_callback;
+extern heartbeat_callback g_heartbeat_callback;
 
-void mr24hpc_update_state(const mr24hpc_state_t *delta);
-void mr24hpc_update_uof_state(const UOF_mr24hpc_state_t *delta);
+void update_state(const mr24hpc_state_t *delta);
+void update_uof_state(const UOF_mr24hpc_state_t *delta);
 
-void mr24hpc_state_lock(void);
-void mr24hpc_state_unlock(void);
+void state_lock(void);
+void state_unlock(void);

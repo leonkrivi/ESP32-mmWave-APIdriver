@@ -4,12 +4,12 @@
 #include "mr24hpc.h"
 #include "mr24hpc_state_update.h"
 
-void mr24hpc_update_state(const mr24hpc_state_t *delta)
+void update_state(const mr24hpc_state_t *delta)
 {
     if (!delta)
         return;
 
-    mr24hpc_state_lock();
+    state_lock();
 
     if (delta->received_bit_mask & MR24HPC_VALID_PRESENCE)
         g_sensor_state.presence = delta->presence;
@@ -26,21 +26,21 @@ void mr24hpc_update_state(const mr24hpc_state_t *delta)
     g_sensor_state.last_update_ms = delta->last_update_ms;
     g_sensor_state.received_bit_mask = delta->received_bit_mask;
 
-    mr24hpc_callback cb = g_cb_function;
+    state_callback cb = g_state_callback;
     mr24hpc_state_t snapshot = g_sensor_state;
 
-    mr24hpc_state_unlock();
+    state_unlock();
 
     if (cb)
         cb(&snapshot);
 }
 
-void mr24hpc_update_uof_state(const UOF_mr24hpc_state_t *delta)
+void update_uof_state(const UOF_mr24hpc_state_t *delta)
 {
     if (!delta)
         return;
 
-    mr24hpc_state_lock();
+    state_lock();
 
     if (delta->received_bit_mask & UOF_MR24HPC_VALID_EXISTENCE_ENERGY)
         g_uof_sensor_state.existence_energy = delta->existence_energy;
@@ -66,21 +66,21 @@ void mr24hpc_update_uof_state(const UOF_mr24hpc_state_t *delta)
     g_uof_sensor_state.last_update_ms = delta->last_update_ms;
     g_uof_sensor_state.received_bit_mask = delta->received_bit_mask;
 
-    mr24hpc_callback cb = g_cb_function;
+    state_callback cb = g_state_callback;
     mr24hpc_state_t snapshot = g_sensor_state;
 
-    mr24hpc_state_unlock();
+    state_unlock();
 
     if (cb)
         cb(&snapshot);
 }
 
-void mr24hpc_state_lock(void)
+void state_lock(void)
 {
     xSemaphoreTake(state_mutex, portMAX_DELAY);
 }
 
-void mr24hpc_state_unlock(void)
+void state_unlock(void)
 {
     xSemaphoreGive(state_mutex);
 }

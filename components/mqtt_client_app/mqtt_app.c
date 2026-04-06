@@ -127,11 +127,6 @@ void mqtt_app_register_rate_callback(mqtt_rate_change_cb_t cb)
     g_ctx.rate_change_cb = cb;
 }
 
-void mqtt_app_register_connection_check_callback(void (*cb)(void))
-{
-    g_ctx.connection_check_cb = cb;
-}
-
 void mqtt_app_wait_connected(TickType_t timeout_ticks)
 {
     if (!g_ctx.event_group)

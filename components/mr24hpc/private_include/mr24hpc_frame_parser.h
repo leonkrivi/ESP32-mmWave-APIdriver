@@ -37,9 +37,11 @@ typedef struct
     uint8_t checksum_buf[MR24_FRAME_MAX_CHECKSUM_BUF];
     size_t checksum_len;
     bool checksum_ok;
+    bool is_hb;
 } mr24hpc_frame_parser_ctx_t;
 
 typedef void (*mr24hpc_frame_handler_t)(uint8_t ctrl, uint8_t cmd, const uint8_t *data, uint16_t len);
+typedef void (*mr24hpc_heartbeat_handler_t)(void);
 
-void mr24hpc_frame_parser_init(mr24hpc_frame_parser_ctx_t *ctx);
-void mr24hpc_frame_parser_feed(mr24hpc_frame_parser_ctx_t *ctx, uint8_t byte, mr24hpc_frame_handler_t on_frame_parsed);
+void frame_parser_init(mr24hpc_frame_parser_ctx_t *ctx);
+void frame_parser_feed(mr24hpc_frame_parser_ctx_t *ctx, uint8_t byte, mr24hpc_frame_handler_t on_frame_parsed, mr24hpc_heartbeat_handler_t on_heartbeat_detected);
