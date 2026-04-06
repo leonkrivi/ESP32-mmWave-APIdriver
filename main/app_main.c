@@ -12,26 +12,28 @@ static const char *TAG = "* app_main *";
 
 static uint32_t g_frequency = 5000; // default: 5 seconds
 
-// MQTT topics controlled from app layer
-#define MQTT_TOPIC_STATE "/test/backend"
-#define MQTT_TOPIC_UOF_STATE "/test/backend"
-#define MQTT_TOPIC_RATE_COMMAND "/test/esp32"
+#define DEVICE_ID "esp32_01"
+#define ROOM_NAME "living_room"
+#define MQTT_TOPIC_PUBLISH_STATE "/test/backend"
+#define MQTT_TOPIC_RECEIVE_RATE_COMMAND "/test/esp32/frequency/set"
+#define MQTT_TOPIC_RECEIVE_CONNECTION_CHECK "/test/esp32/status/get"
 
 // ==================== Forward Declarations ====================
 
 static void on_state_change(const mr24hpc_state_t *state);
 static void on_rate_change(uint32_t interval_ms);
+static void on_check_connection(void);
 
 // ==================== Main Application ====================
 void app_main(void)
 {
-    bool uof_enabled = false;
+    bool uof = false;
     sensor_state_tracker_init();
 
     printf("================  start of APP output ================\n");
     ESP_LOGW(TAG, "Initializing MR24HPC sensor...");
-    mr24hpc_init(uof_enabled);
-    mr24hpc_set_query_interval_ms(g_frequency);
+    mr24hpc_init(uof);
+    mr24hpc_set_query_interval_ms(g_frequency); // set initial frequency before callbacks start coming in
     mr24hpc_register_callback(on_state_change);
     mr24hpc_start();
 
@@ -42,7 +44,8 @@ void app_main(void)
 
     ESP_LOGW(TAG, "Initializing MQTT...");
     mqtt_app_register_rate_callback(on_rate_change);
-    mqtt_app_start(MQTT_TOPIC_RATE_COMMAND);
+    mqtt_app_register_connection_check_callback(on_check_connection);
+    mqtt_app_start(DEVICE_ID, ROOM_NAME, MQTT_TOPIC_RECEIVE_RATE_COMMAND, MQTT_TOPIC_RECEIVE_CONNECTION_CHECK);
     ESP_LOGW(TAG, "Waiting for MQTT connection...");
     mqtt_app_wait_connected(portMAX_DELAY);
 
@@ -56,14 +59,6 @@ void app_main(void)
 
 // ==================== Callbacks ====================
 
-static void on_rate_change(uint32_t interval_ms)
-{
-    g_frequency = interval_ms;
-    mr24hpc_set_query_interval_ms(interval_ms);
-    ESP_LOGW(TAG, "Frequency changed to %lu ms", interval_ms);
-}
-
-// MR24HPC state change callback
 static void on_state_change(const mr24hpc_state_t *state)
 {
     UOF_mr24hpc_state_t uof_state = {0};
@@ -101,5 +96,12 @@ static void on_state_change(const mr24hpc_state_t *state)
     //     sensor_logger_print_standard(state, g_frequency);
 
     // send via MQTT if state changed or first sample
-    mqtt_app_publish_state(MQTT_TOPIC_STATE, state);
+    mqtt_app_publish_state(MQTT_TOPIC_PUBLISH_STATE, state);
+}
+
+static void on_rate_change(uint32_t interval_ms)
+{
+    g_frequency = interval_ms;
+    mr24hpc_set_query_interval_ms(interval_ms);
+    ESP_LOGW(TAG, "Frequency changed to %lu ms", interval_ms);
 }
