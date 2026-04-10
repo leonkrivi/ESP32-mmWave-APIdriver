@@ -1,29 +1,36 @@
 #include <stdbool.h>
 #include <inttypes.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_log.h"
 
+#include "mr24hpc.h"
 #include "mqtt_event.h"
 
 static const char *TAG = "* mqtt_app *";
 
 // ==================== Forward Declarations ====================
-static bool topic_matches(const char *topic, int t_len, const char *expected_topic);
-static void process_rate_command_message(mqtt_app_context_t *ctx,
-                                         const char *topic,
-                                         int t_len,
-                                         const char *data,
-                                         int d_len);
-static void process_connection_status_message(mqtt_app_context_t *ctx,
-                                              const char *topic,
-                                              int t_len,
-                                              const char *data,
-                                              int d_len);
+
+static void process_configuration_message(mqtt_app_context_t *ctx,
+                                          const char *topic,
+                                          size_t topic_len,
+                                          const char *data,
+                                          int data_len);
+static void process_check_connection_status_message(mqtt_app_context_t *ctx,
+                                                    const char *topic,
+                                                    size_t topic_len,
+                                                    const char *data,
+                                                    int data_len);
+static bool topic_matches(const char *topic, size_t topic_len, const char *expected_topic);
 static bool copy_payload(char *dst, size_t dst_size, const char *data, int d_len);
 static bool parse_u32_decimal(const char *text, uint32_t *value_out);
+static bool extract_json_rate_value(const char *json,
+                                    const char *key,
+                                    uint32_t *value_out);
 
 // ==================== Event Handler ====================
+
 void mqtt_app_event_handler(void *handler_args,
                             esp_event_base_t base,
                             int32_t event_id,
@@ -44,17 +51,21 @@ void mqtt_app_event_handler(void *handler_args,
     case MQTT_EVENT_CONNECTED:
         if (ctx->event_group)
             xEventGroupSetBits(ctx->event_group, MQTT_CONNECTED_BIT);
-        ESP_LOGW(TAG, "Client connected to broker: %s", ctx->broker_cfg.broker.address.uri);
-        if (ctx->rate_command_topic)
-            esp_mqtt_client_subscribe_single(client, ctx->rate_command_topic, 1);
-        if (ctx->connection_status_topic)
-            esp_mqtt_client_subscribe_single(client, ctx->connection_status_topic, 1);
+        ESP_LOGW(TAG, "Client connected to broker: %s", ctx->client_cfg.broker.address.uri);
+
+        // publish retained "online" message to LWT topic upon successful connection
+        esp_mqtt_client_publish(client, ctx->connection_status_topic, "{\"status\":\"online\"}", 0, 1, 1); // QoS 1, retain=true
+
+        if (ctx->configuration_topic)
+            esp_mqtt_client_subscribe_single(client, ctx->configuration_topic, 1); // QoS 1
+        if (ctx->sensor_status_check_topic)
+            esp_mqtt_client_subscribe_single(client, ctx->sensor_status_check_topic, 1); // QoS 1
         break;
 
     case MQTT_EVENT_DISCONNECTED:
         if (ctx->event_group)
             xEventGroupClearBits(ctx->event_group, MQTT_CONNECTED_BIT);
-        ESP_LOGW(TAG, "Disconnected, auto-reconnect in %d s...", MQTT_RECONNECT_DELAY_MS / 1000);
+        ESP_LOGW(TAG, "Disconnected, auto-reconnect in %d ms...", MQTT_RECONNECT_DELAY_MS);
         break;
 
     case MQTT_EVENT_DATA:
@@ -69,8 +80,8 @@ void mqtt_app_event_handler(void *handler_args,
 
         ESP_LOGI(TAG, "received message: (%.*s) %.*s", t_len, topic, d_len, data);
 
-        process_rate_command_message(ctx, topic, t_len, data, d_len);
-        process_connection_status_message(ctx, topic, t_len, data, d_len);
+        process_configuration_message(ctx, topic, (size_t)t_len, data, d_len);
+        process_check_connection_status_message(ctx, topic, (size_t)t_len, data, d_len);
         break;
     }
 
@@ -79,19 +90,73 @@ void mqtt_app_event_handler(void *handler_args,
     }
 }
 
-// ==================== Helper Functions ====================
-static bool topic_matches(const char *topic, int t_len, const char *expected_topic)
+static void process_configuration_message(mqtt_app_context_t *ctx,
+                                          const char *topic,
+                                          size_t topic_len,
+                                          const char *data,
+                                          int data_len)
 {
-    if (!topic || t_len < 0 || !expected_topic)
+    if (!ctx || !topic_matches(topic, topic_len, ctx->configuration_topic))
+        return;
+
+    char payload[192];
+    if (!copy_payload(payload, sizeof(payload), data, data_len))
+        return;
+
+    uint32_t hb_rate_ms = 0;
+    if (extract_json_rate_value(payload, "hb_rate", &hb_rate_ms) && hb_rate_ms > 0)
+    {
+        if (ctx->hb_rate_change_cb)
+        {
+            ESP_LOGI(TAG, "--> received hb rate change command: %" PRIu32 " ms", hb_rate_ms);
+            ctx->hb_rate_change_cb(hb_rate_ms);
+        }
+    }
+
+    uint32_t sensor_rate_ms = 0;
+    if (extract_json_rate_value(payload, "sensor_rate", &sensor_rate_ms) && sensor_rate_ms > 0)
+    {
+        if (ctx->sensor_rate_change_cb)
+        {
+            ESP_LOGI(TAG, "--> received sensor rate change command: %" PRIu32 " ms", sensor_rate_ms);
+            ctx->sensor_rate_change_cb(sensor_rate_ms);
+        }
+    }
+}
+
+static void process_check_connection_status_message(mqtt_app_context_t *ctx,
+                                                    const char *topic,
+                                                    size_t topic_len,
+                                                    const char *data,
+                                                    int data_len)
+{
+    if (!ctx || !topic_matches(topic, topic_len, ctx->sensor_status_check_topic))
+        return;
+
+    char payload[192];
+    if (!copy_payload(payload, sizeof(payload), data, data_len) || strcmp(payload, "check sensor") != 0)
+        return;
+
+    ESP_LOGI(TAG, "--> received check sensor status command");
+
+    trigger_heartbeat_now();
+}
+
+// ==================== Helper Functions ====================
+
+static bool topic_matches(const char *topic, size_t topic_len, const char *expected_topic)
+{
+    if (!topic || !expected_topic)
         return false;
 
     size_t expected_len = strlen(expected_topic);
-    return ((size_t)t_len == expected_len) && (strncmp(topic, expected_topic, expected_len) == 0);
+
+    return (topic_len == expected_len) && (strncmp(topic, expected_topic, topic_len) == 0);
 }
 
 static bool copy_payload(char *dst, size_t dst_size, const char *data, int d_len)
 {
-    if (!dst || !data || d_len <= 0 || (size_t)d_len >= dst_size || d_len > MQTT_MAX_CMD_PAYLOAD_LEN)
+    if (!dst || !data || d_len <= 0 || (size_t)d_len >= dst_size)
         return false;
 
     memcpy(dst, data, (size_t)d_len);
@@ -121,48 +186,50 @@ static bool parse_u32_decimal(const char *text, uint32_t *value_out)
     return true;
 }
 
-static void process_rate_command_message(mqtt_app_context_t *ctx,
-                                         const char *topic,
-                                         int topic_len,
-                                         const char *data,
-                                         int data_len)
+static bool extract_json_rate_value(const char *json,
+                                    const char *key,
+                                    uint32_t *value_out)
 {
-    if (!ctx || !topic_matches(topic, topic_len, ctx->rate_command_topic))
-        return;
+    if (!json || !key || !value_out)
+        return false;
 
-    char payload[MQTT_MAX_CMD_PAYLOAD_LEN + 1];
-    if (!copy_payload(payload, sizeof(payload), data, data_len))
-        return;
+    char key_pattern[64];
+    int key_len = snprintf(key_pattern, sizeof(key_pattern), "\"%s\"", key);
+    if (key_len <= 0 || (size_t)key_len >= sizeof(key_pattern))
+        return false;
 
-    uint32_t interval_ms = 0;
-    if (!parse_u32_decimal(payload, &interval_ms) || interval_ms == 0)
-        return;
+    const char *key_pos = strstr(json, key_pattern);
+    if (!key_pos)
+        return false;
 
-    if (!ctx->rate_change_cb)
-        return;
+    const char *value_pos = strchr(key_pos + key_len, ':');
+    if (!value_pos)
+        return false;
 
-    ESP_LOGI(TAG, "--> received rate change command: %" PRIu32 " ms", interval_ms);
+    ++value_pos;
+    while (*value_pos == ' ' || *value_pos == '\t' || *value_pos == '\n' || *value_pos == '\r')
+        ++value_pos;
 
-    ctx->rate_change_cb(interval_ms); // call the registered callback to change the rate
-}
+    bool quoted = (*value_pos == '"');
+    if (quoted)
+        ++value_pos;
 
-static void process_connection_status_message(mqtt_app_context_t *ctx,
-                                              const char *topic,
-                                              int topic_len,
-                                              const char *data,
-                                              int data_len)
-{
-    if (!ctx || !topic_matches(topic, topic_len, ctx->connection_status_topic))
-        return;
+    char number_buf[16];
+    size_t i = 0;
+    while (*value_pos >= '0' && *value_pos <= '9')
+    {
+        if (i >= sizeof(number_buf) - 1)
+            return false;
+        number_buf[i++] = *value_pos++;
+    }
 
-    char payload[MQTT_MAX_CMD_PAYLOAD_LEN + 1];
-    if (!copy_payload(payload, sizeof(payload), data, data_len) || strcmp(payload, "check connection") != 0)
-        return;
+    if (i == 0)
+        return false;
 
-    if (!ctx->connection_check_cb)
-        return;
+    number_buf[i] = '\0';
 
-    ESP_LOGI(TAG, "--> received check connection status command");
+    if (quoted && *value_pos != '"')
+        return false;
 
-    ctx->connection_check_cb(); // call the registered callback to check the connection status
+    return parse_u32_decimal(number_buf, value_out);
 }

@@ -26,7 +26,9 @@ bool mr24hpc_get_uof_state(UOF_mr24hpc_state_t *state_copy);
 
 bool mr24hpc_is_uof_mode(void);
 
+esp_err_t trigger_heartbeat_now(void);
+
 esp_err_t set_heartbeat_interval_ms(uint32_t interval_ms);
 uint32_t get_heartbeat_interval_ms(void);
-esp_err_t set_query_interval_ms(uint32_t interval_ms);
-uint32_t get_query_interval_ms(void);
+esp_err_t set_sensor_rate_interval_ms(uint32_t interval_ms);
+uint32_t get_sensor_rate_interval_ms(void);

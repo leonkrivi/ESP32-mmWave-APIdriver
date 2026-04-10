@@ -33,7 +33,6 @@ void frame_parser_feed(mr24hpc_frame_parser_ctx_t *ctx,
 {
     if (!ctx)
         return;
-    ctx->is_hb = true; // optimistically assume it's a heartbeat until we see otherwise
 
     switch (ctx->state)
     {
@@ -44,6 +43,7 @@ void frame_parser_feed(mr24hpc_frame_parser_ctx_t *ctx,
             ctx->checksum_buf[ctx->checksum_len++] = byte;
             ctx->checksum_ok = false;
             ctx->state = WAIT_H2;
+            ctx->is_hb = true; // optimistically assume it's a heartbeat until we see otherwise
         }
         break;
 
@@ -121,7 +121,7 @@ void frame_parser_feed(mr24hpc_frame_parser_ctx_t *ctx,
         break;
 
     case WAIT_CHECKSUM:
-        if (byte != 0x55)
+        if (byte != 0xBE)
             ctx->is_hb = false;
         ctx->checksum_ok = (calculate_checksum(ctx->checksum_buf, ctx->checksum_len) == byte);
         if (ctx->checksum_ok)

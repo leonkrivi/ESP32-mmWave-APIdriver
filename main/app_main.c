@@ -8,22 +8,19 @@
 #include "sensor_state_tracker.h"
 #include "sensor_logger.h"
 
-static const char *TAG = "* app_main *";
+#define INITIAL_SENSOR_RATE_INTERVAL_MS 5000
+#define INITIAL_HEARTBEAT_RATE_INTERVAL_MS 10000
 
-#define INITIAL_QUERY_INTERVAL_MS 5000
-#define INITIAL_HEARTBEAT_INTERVAL_MS 30000
-
-#define DEVICE_ID "esp32_01"
+#define DEVICE_ID "01"
 #define ROOM_NAME "living_room"
 
-#define MQTT_TOPIC_PUBLISH_STATE "/test/backend"
-#define MQTT_TOPIC_RECEIVE_RATE_COMMAND "/test/esp32/frequency/set"
-#define MQTT_TOPIC_RECEIVE_CONNECTION_CHECK "/test/esp32/status/get"
+static const char *TAG = "* app_main *";
 
 // ==================== Forward Declarations ====================
 
 static void on_state_change(const mr24hpc_state_t *state);
-static void on_rate_change(uint32_t interval_ms);
+static void on_hb_rate_change(uint32_t interval_ms);
+static void on_sensor_rate_change(uint32_t interval_ms);
 static void on_heartbeat_detected(void);
 
 // ==================== Main Application ====================
@@ -36,8 +33,8 @@ void app_main(void)
     ESP_LOGW(TAG, "Initializing MR24HPC sensor...");
     mr24hpc_init(uof);
 
-    set_query_interval_ms(INITIAL_QUERY_INTERVAL_MS);         // set initial frequency before callbacks start coming in
-    set_heartbeat_interval_ms(INITIAL_HEARTBEAT_INTERVAL_MS); // set heartbeat interval to 30s
+    set_sensor_rate_interval_ms(INITIAL_SENSOR_RATE_INTERVAL_MS);  // set initial frequency before callbacks start coming in
+    set_heartbeat_interval_ms(INITIAL_HEARTBEAT_RATE_INTERVAL_MS); // set heartbeat interval to 10s
 
     register_state_callback(on_state_change);
     register_heartbeat_callback(on_heartbeat_detected);
@@ -49,8 +46,8 @@ void app_main(void)
     wifi_manager_wait_connected(portMAX_DELAY);
 
     ESP_LOGW(TAG, "Initializing MQTT...");
-    mqtt_app_register_rate_callback(on_rate_change);
-    mqtt_app_start(DEVICE_ID, ROOM_NAME, MQTT_TOPIC_RECEIVE_RATE_COMMAND, MQTT_TOPIC_RECEIVE_CONNECTION_CHECK);
+    mqtt_app_register_rate_callbacks(on_hb_rate_change, on_sensor_rate_change);
+    mqtt_app_start(DEVICE_ID, ROOM_NAME, MQTT_TOPIC_CONNECTION_STATUS, MQTT_TOPIC_CONFIGURATION, MQTT_TOPIC_SENSOR_STATUS, MQTT_TOPIC_SENSOR_STATUS_CHECK);
     ESP_LOGW(TAG, "Waiting for MQTT connection...");
     mqtt_app_wait_connected(portMAX_DELAY);
 
@@ -87,7 +84,7 @@ static void on_state_change(const mr24hpc_state_t *state)
         // if (tracker_result == SENSOR_TRACKER_CHANGED || tracker_result == SENSOR_TRACKER_FIRST_SAMPLE)
         //     sensor_logger_print_uof(&uof_state, g_frequency);
 
-        mqtt_app_publish_uof_state(MQTT_TOPIC_UOF_STATE, &uof_state);
+        mqtt_app_publish_uof_state(MQTT_TOPIC_ROOM_STATE, &uof_state);
         return;
     }
 
@@ -101,16 +98,23 @@ static void on_state_change(const mr24hpc_state_t *state)
     //     sensor_logger_print_standard(state, g_frequency);
 
     // send via MQTT if state changed or first sample
-    mqtt_app_publish_state(MQTT_TOPIC_PUBLISH_STATE, state);
+    mqtt_app_publish_state(MQTT_TOPIC_ROOM_STATE, state);
 }
 
-static void on_rate_change(uint32_t interval_ms)
+static void on_hb_rate_change(uint32_t interval_ms)
 {
-    set_query_interval_ms(interval_ms);
-    ESP_LOGW(TAG, "Frequency changed to %lu ms", interval_ms);
+    set_heartbeat_interval_ms(interval_ms);
+    ESP_LOGW(TAG, "Heartbeat interval changed to %lu ms", interval_ms);
+}
+
+static void on_sensor_rate_change(uint32_t interval_ms)
+{
+    set_sensor_rate_interval_ms(interval_ms);
+    ESP_LOGW(TAG, "Sensor rate changed to %lu ms", interval_ms);
 }
 
 static void on_heartbeat_detected(void)
 {
     ESP_LOGW(TAG, "Heartbeat detected");
+    mqtt_app_publish_sensor_status(MQTT_TOPIC_SENSOR_STATUS, "alive", get_heartbeat_interval_ms());
 }

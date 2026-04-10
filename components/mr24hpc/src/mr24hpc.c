@@ -28,7 +28,7 @@ static uint32_t g_query_interval_ms = 5000;
 static uint32_t g_hearbeat_interval_ms = 30000;
 static const uint8_t g_standard_query_cmds[] = {0x81, 0x82, 0x83, 0x8B};
 static const uint8_t g_uof_query_cmds[] = {0x01, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87};
-static const uint8_t g_heartbeat_packet[] = {0x53, 0x59, 0x01, 0x01, 0x00, 0x01, 0x0F, 0x55, 0x54, 0x43};
+static const uint8_t g_heartbeat_packet[] = {0x53, 0x59, 0x01, 0x01, 0x00, 0x01, 0x0F, 0xBE, 0x54, 0x43};
 
 // ==================== Forward Declarations ====================
 
@@ -112,6 +112,12 @@ bool mr24hpc_is_uof_mode(void)
     return g_uof_mode_enabled;
 }
 
+esp_err_t trigger_heartbeat_now(void)
+{
+    uart_write(g_heartbeat_packet, sizeof(g_heartbeat_packet));
+    return ESP_OK;
+}
+
 esp_err_t set_heartbeat_interval_ms(uint32_t interval_ms)
 {
     state_lock();
@@ -132,7 +138,7 @@ uint32_t get_heartbeat_interval_ms(void)
     return interval_ms;
 }
 
-esp_err_t set_query_interval_ms(uint32_t interval_ms)
+esp_err_t set_sensor_rate_interval_ms(uint32_t interval_ms)
 {
     state_lock();
     g_query_interval_ms = interval_ms;
@@ -141,7 +147,7 @@ esp_err_t set_query_interval_ms(uint32_t interval_ms)
     return ESP_OK;
 }
 
-uint32_t get_query_interval_ms(void)
+uint32_t get_sensor_rate_interval_ms(void)
 {
     uint32_t interval_ms;
 
@@ -186,7 +192,7 @@ static void query_task(void *arg)
 
     while (1)
     {
-        uint32_t interval_ms = get_query_interval_ms();
+        uint32_t interval_ms = get_sensor_rate_interval_ms();
 
         int command_count = 0;
         uint8_t control = g_uof_mode_enabled ? 0x08 : 0x80;
