@@ -9,8 +9,8 @@
 #define MQTT_CONNECTED_BIT (1 << 0)
 #define MQTT_RECONNECT_DELAY_MS 100
 
-#define MQTT_KEEPALIVE_SEC 60
-#define MQTT_LWT_WILL_DELAY_SEC 30 // gives X seconds for the recconect
+#define MQTT_KEEPALIVE_SEC 10
+#define MQTT_LWT_WILL_DELAY_SEC 5 // gives X seconds for the recconect
 #define MQTT_SESSION_EXPIRY_SEC 3600
 
 #define MQTT_BROKER_URI "mqtt://" MQTT_BROKER_IP ":1883" // loaded at compile time from .env file
@@ -26,7 +26,7 @@ typedef struct
     EventGroupHandle_t event_group;
 
     const char *device_id;
-    const char *room;
+    const char *room_id;
     mqtt_hb_rate_change_cb_t hb_rate_change_cb;
     mqtt_sensor_rate_change_cb_t sensor_rate_change_cb;
 

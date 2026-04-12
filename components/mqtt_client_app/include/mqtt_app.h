@@ -9,15 +9,15 @@
 #include "mr24hpc_types_uof.h"
 #include "mqtt_types.h"
 
-#define MQTT_TOPIC_ROOM_STATE "/device/" DEVICE_ID "/room_state"
-#define MQTT_TOPIC_CONFIGURATION "/device/" DEVICE_ID "/configuration"
-#define MQTT_TOPIC_CONNECTION_STATUS "/device/" DEVICE_ID "/connection/status"     // LWT topic, esp publishes "online" or "offline" retained messages to this topic
-#define MQTT_TOPIC_SENSOR_STATUS "/device/" DEVICE_ID "/sensor/status"             // esp is publisher to this topic
-                                                                                   // indicates connection status and heartbeat interval
-#define MQTT_TOPIC_SENSOR_STATUS_CHECK "/device/" DEVICE_ID "/sensor/status/check" // esp is subscriber to this topic
-                                                                                   // receives "check connection" command to trigger heartbeat immediately
+#define MQTT_TOPIC_ROOM_STATE "/room/" ROOM_ID "/device/" DEVICE_ID "/room_state"
+#define MQTT_TOPIC_CONFIGURATION "/room/" ROOM_ID "/device/" DEVICE_ID "/configuration"
+#define MQTT_TOPIC_CONNECTION_STATUS "/room/" ROOM_ID "/device/" DEVICE_ID "/connection/status"     // LWT topic, esp publishes "online" or "offline" retained messages to this topic
+#define MQTT_TOPIC_SENSOR_STATUS "/room/" ROOM_ID "/device/" DEVICE_ID "/sensor/status"             // esp is publisher to this topic
+                                                                                                    // indicates connection status and heartbeat interval
+#define MQTT_TOPIC_SENSOR_STATUS_CHECK "/room/" ROOM_ID "/device/" DEVICE_ID "/sensor/status/check" // esp is subscriber to this topic
+                                                                                                    // receives "check connection" command to trigger heartbeat immediately
 void mqtt_app_start(const char *device_id,
-                    const char *room,
+                    const char *room_id,
                     const char *connection_status_topic,
                     const char *configuration_topic,
                     const char *sensor_status_topic,

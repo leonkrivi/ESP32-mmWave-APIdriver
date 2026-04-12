@@ -22,9 +22,9 @@ static bool g_has_uof_state;
 static bool has_state_changed(const mr24hpc_state_t *curr, const mr24hpc_state_t *prev)
 {
     return curr->presence != prev->presence ||
-           curr->motion != prev->motion ||
-           curr->body_movement != prev->body_movement ||
-           curr->proximity != prev->proximity;
+           curr->motion != prev->motion;
+    //        curr->body_movement != prev->body_movement ||
+    //        curr->proximity != prev->proximity;
 }
 
 static bool has_uof_state_changed(const UOF_mr24hpc_state_t *curr, const UOF_mr24hpc_state_t *prev)

@@ -47,14 +47,14 @@ static const char *uof_direction_to_str(UOF_mr24hpc_direction_t dir);
 
 // ==================== Personal Header functions ====================
 void mqtt_app_start(const char *device_id,
-                    const char *room,
+                    const char *room_id,
                     const char *connection_status_topic,
                     const char *configuration_topic,
                     const char *sensor_status_topic,
                     const char *sensor_status_check_topic)
 {
     g_ctx.device_id = device_id;
-    g_ctx.room = room;
+    g_ctx.room_id = room_id;
 
     g_ctx.connection_status_topic = connection_status_topic;
     g_ctx.configuration_topic = configuration_topic;
@@ -126,7 +126,7 @@ void mqtt_app_publish_sensor_status(const char *topic, const char *status, uint3
              status,
              (unsigned)hb_interval);
 
-    esp_mqtt_client_publish(g_ctx.client, topic, payload, 0, 0, 0);
+    esp_mqtt_client_publish(g_ctx.client, topic, payload, 0, 0, 0); // QoS 0
 }
 
 void mqtt_app_publish_state(const char *topic, const mr24hpc_state_t *state)
@@ -140,24 +140,16 @@ void mqtt_app_publish_state(const char *topic, const mr24hpc_state_t *state)
     snprintf(payload, sizeof(payload),
              "{"
              "\"seq\":%" PRIu32 ","
-             "\"room\":\"%s\","
-             "\"device_id\":\"%s\","
              "\"presence\":%u,"
              "\"motion\":%u,"
              "\"sensor_rate\":%u"
-             //  "\"body_movement\":%u,"
-             //  "\"proximity\":%u"
              "}",
              seq,
-             g_ctx.room,
-             g_ctx.device_id,
              (unsigned)state->presence,
              (unsigned)state->motion,
              (unsigned)get_sensor_rate_interval_ms());
-    //  (unsigned)state->body_movement,
-    //  (unsigned)state->proximity
 
-    esp_mqtt_client_publish(g_ctx.client, topic, payload, 0, 0, 0);
+    esp_mqtt_client_publish(g_ctx.client, topic, payload, 0, 0, 0); // QoS 0
 }
 
 // currently out of date, needs to be updated to match the non-UOF state struct and fields

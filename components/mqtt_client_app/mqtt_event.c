@@ -134,7 +134,7 @@ static void process_check_connection_status_message(mqtt_app_context_t *ctx,
         return;
 
     char payload[192];
-    if (!copy_payload(payload, sizeof(payload), data, data_len) || strcmp(payload, "check sensor") != 0)
+    if (!copy_payload(payload, sizeof(payload), data, data_len) || strcmp(payload, "{\"check sensor\"}") != 0)
         return;
 
     ESP_LOGI(TAG, "--> received check sensor status command");
