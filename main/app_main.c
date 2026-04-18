@@ -47,7 +47,13 @@ void app_main(void)
 
     ESP_LOGW(TAG, "Initializing MQTT...");
     mqtt_app_register_rate_callbacks(on_hb_rate_change, on_sensor_rate_change);
-    mqtt_app_start(DEVICE_ID, ROOM_ID, MQTT_TOPIC_CONNECTION_STATUS, MQTT_TOPIC_CONFIGURATION, MQTT_TOPIC_SENSOR_STATUS, MQTT_TOPIC_SENSOR_STATUS_CHECK);
+    mqtt_app_start(DEVICE_ID,
+                   ROOM_ID,
+                   MQTT_TOPIC_CONNECTION_STATUS,
+                   MQTT_TOPIC_CONFIGURATION,
+                   MQTT_TOPIC_SENSOR_STATUS,
+                   MQTT_TOPIC_SENSOR_STATUS_CHECK,
+                   MQTT_TOPIC_RESET);
     ESP_LOGW(TAG, "Waiting for MQTT connection...");
     mqtt_app_wait_connected(portMAX_DELAY);
 

@@ -35,6 +35,8 @@ static mqtt_app_context_t g_ctx = {
     .configuration_topic = NULL,
     .sensor_status_topic = NULL,
     .sensor_status_check_topic = NULL,
+    .reset_topic = NULL,
+    .reset_message_sent = false,
     .state_payload_seq = 0,
     .sensor_status_payload_seq = 0,
 };
@@ -43,6 +45,7 @@ static mqtt_app_context_t g_ctx = {
 
 static uint32_t next_state_payload_seq(void);
 static uint32_t next_sensor_status_payload_seq(void);
+static uint32_t normalize_seq_after_overflow(uint32_t seq);
 static const char *uof_direction_to_str(UOF_mr24hpc_direction_t dir);
 
 // ==================== Personal Header functions ====================
@@ -51,7 +54,8 @@ void mqtt_app_start(const char *device_id,
                     const char *connection_status_topic,
                     const char *configuration_topic,
                     const char *sensor_status_topic,
-                    const char *sensor_status_check_topic)
+                    const char *sensor_status_check_topic,
+                    const char *reset_topic)
 {
     g_ctx.device_id = device_id;
     g_ctx.room_id = room_id;
@@ -60,6 +64,8 @@ void mqtt_app_start(const char *device_id,
     g_ctx.configuration_topic = configuration_topic;
     g_ctx.sensor_status_topic = sensor_status_topic;
     g_ctx.sensor_status_check_topic = sensor_status_check_topic;
+    g_ctx.reset_topic = reset_topic;
+    g_ctx.reset_message_sent = false;
 
     g_ctx.client_cfg.session.last_will.topic = connection_status_topic;
 
@@ -113,14 +119,14 @@ void mqtt_app_publish_sensor_status(const char *topic, const char *status, uint3
     if (!g_ctx.client || !mqtt_app_is_connected() || !status || !topic)
         return;
 
-    uint32_t seq = next_sensor_status_payload_seq();
+    uint32_t seq = normalize_seq_after_overflow(next_sensor_status_payload_seq());
 
     char payload[192];
     snprintf(payload, sizeof(payload),
              "{"
              "\"seq\":%" PRIu32 ","
              "\"sensor\":\"%s\","
-             "\"hb_interval\": \"%u\""
+             "\"hb_interval\": %u"
              "}",
              seq,
              status,
@@ -134,7 +140,7 @@ void mqtt_app_publish_state(const char *topic, const mr24hpc_state_t *state)
     if (!g_ctx.client || !mqtt_app_is_connected() || !state || !topic)
         return;
 
-    uint32_t seq = next_state_payload_seq();
+    uint32_t seq = normalize_seq_after_overflow(next_state_payload_seq());
 
     char payload[192];
     snprintf(payload, sizeof(payload),
@@ -158,7 +164,7 @@ void mqtt_app_publish_uof_state(const char *topic, const UOF_mr24hpc_state_t *st
     if (!g_ctx.client || !mqtt_app_is_connected() || !state || !topic)
         return;
 
-    uint32_t seq = next_state_payload_seq();
+    uint32_t seq = normalize_seq_after_overflow(next_state_payload_seq());
 
     char payload[288];
     snprintf(payload, sizeof(payload),
@@ -182,6 +188,26 @@ void mqtt_app_publish_uof_state(const char *topic, const UOF_mr24hpc_state_t *st
              state->moving_params);
 
     esp_mqtt_client_publish(g_ctx.client, topic, payload, 0, 0, 0);
+}
+
+void mqtt_app_publish_reset(const char *topic, uint32_t hb_rate, uint32_t sensor_rate)
+{
+    if (!g_ctx.client || !mqtt_app_is_connected() || !topic)
+        return;
+
+    char payload[128];
+    snprintf(payload,
+             sizeof(payload),
+             "{"
+             "\"hb_rate\":%" PRIu32 ","
+             "\"sensor_rate\":%" PRIu32 ","
+             "\"state_seq\":0,"
+             "\"sensor_seq\":0"
+             "}",
+             hb_rate,
+             sensor_rate);
+
+    esp_mqtt_client_publish(g_ctx.client, topic, payload, 0, 1, 0); // QoS 1, retain=false
 }
 
 void mqtt_app_wait_connected(TickType_t timeout_ticks)
@@ -226,4 +252,24 @@ static uint32_t next_state_payload_seq(void)
 static uint32_t next_sensor_status_payload_seq(void)
 {
     return __atomic_fetch_add(&g_ctx.sensor_status_payload_seq, 1U, __ATOMIC_RELAXED);
+}
+
+static uint32_t normalize_seq_after_overflow(uint32_t seq)
+{
+    if (seq != UINT32_MAX)
+        return seq;
+
+    __atomic_store_n(&g_ctx.state_payload_seq, 0U, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_ctx.sensor_status_payload_seq, 0U, __ATOMIC_RELAXED);
+
+    ESP_LOGW(TAG, "SEQ overflow detected, resetting seq counters to 0");
+
+    if (g_ctx.reset_topic)
+    {
+        uint32_t sensor_rate_ms = get_sensor_rate_interval_ms();
+        uint32_t hb_rate_ms = get_heartbeat_interval_ms();
+        mqtt_app_publish_reset(g_ctx.reset_topic, hb_rate_ms, sensor_rate_ms);
+    }
+
+    return 0U;
 }

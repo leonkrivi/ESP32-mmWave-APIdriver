@@ -6,6 +6,7 @@
 #include "esp_log.h"
 
 #include "mr24hpc.h"
+#include "mqtt_app.h"
 #include "mqtt_event.h"
 
 static const char *TAG = "* mqtt_app *";
@@ -55,6 +56,14 @@ void mqtt_app_event_handler(void *handler_args,
 
         // publish retained "online" message to LWT topic upon successful connection
         esp_mqtt_client_publish(client, ctx->connection_status_topic, "{\"status\":\"online\"}", 0, 1, 1); // QoS 1, retain=true
+
+        if (!ctx->reset_message_sent && ctx->reset_topic)
+        {
+            uint32_t sensor_rate_ms = get_sensor_rate_interval_ms();
+            uint32_t hb_rate_ms = get_heartbeat_interval_ms();
+            mqtt_app_publish_reset(ctx->reset_topic, hb_rate_ms, sensor_rate_ms);
+            ctx->reset_message_sent = true;
+        }
 
         if (ctx->configuration_topic)
             esp_mqtt_client_subscribe_single(client, ctx->configuration_topic, 1); // QoS 1

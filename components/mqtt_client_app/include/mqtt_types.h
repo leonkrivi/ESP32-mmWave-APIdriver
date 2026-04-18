@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"
@@ -34,6 +35,8 @@ typedef struct
     const char *configuration_topic;
     const char *sensor_status_topic;
     const char *sensor_status_check_topic;
+    const char *reset_topic;
+    bool reset_message_sent;
 
     uint32_t state_payload_seq;
     uint32_t sensor_status_payload_seq;
